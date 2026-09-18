@@ -23,12 +23,13 @@ import {
   Target,
   Trophy,
   UserRound,
+  Users,
   Volume2,
   VolumeX,
   Zap,
 } from "lucide-react";
 
-type Screen = "hq" | "setup" | "player" | "complete";
+type Screen = "hq" | "setup" | "player" | "complete" | "parent";
 type Mode = "interactive" | "guidance" | "relaxation";
 
 const heroImage = "/manus-storage/fearless-hq-wireframe-v2_c79d9b43.png";
@@ -135,7 +136,7 @@ function MetricCard({ type }: { type: "score" | "streak" }) {
   );
 }
 
-function HQScreen({ onStart, onSetup, onNavigate }: { onStart: () => void; onSetup: () => void; onNavigate: (key: string) => void }) {
+function HQScreen({ onStart, onSetup, onParent, onNavigate }: { onStart: () => void; onSetup: () => void; onParent: () => void; onNavigate: (key: string) => void }) {
   const [day, setDay] = useState("MON");
   const days = ["MON", "TUE", "WED", "THU", "FRI", "SAT", "SUN"];
   return (
@@ -143,7 +144,7 @@ function HQScreen({ onStart, onSetup, onNavigate }: { onStart: () => void; onSet
       <div className="hero-wash" />
       <header className="hq-header">
         <BrandMark />
-        <button className="icon-button" aria-label="Notifications"><Bell size={22} /></button>
+        <div className="header-actions"><button className="parent-entry" onClick={onParent}><Users size={15} /> Parent view</button><button className="icon-button" aria-label="Notifications"><Bell size={22} /></button></div>
       </header>
       <section className="greeting">
         <span className="eyebrow">GOOD EVENING,</span>
@@ -185,6 +186,37 @@ function HQScreen({ onStart, onSetup, onNavigate }: { onStart: () => void; onSet
         <button className="circle-arrow" aria-label="Open mentor shortcut"><ChevronRight size={19} /></button>
       </section>
       <NavBar active="hq" onNavigate={onNavigate} />
+    </div>
+  );
+}
+
+
+function ParentDashboard({ onBack, onNavigate }: { onBack: () => void; onNavigate: (key: string) => void }) {
+  return (
+    <div className="screen parent-screen">
+      <div className="parent-glow" />
+      <header className="parent-header">
+        <button className="back-button parent-back" onClick={onBack} aria-label="Back to Fearless HQ"><ArrowLeft size={22} /></button>
+        <div className="parent-title"><span className="eyebrow">CAREGIVER VIEW</span><strong>Parent dashboard</strong></div>
+        <button className="icon-button parent-settings" aria-label="Parent dashboard settings"><Settings2 size={19} /></button>
+      </header>
+      <main className="parent-content">
+        <section className="athlete-identity"><div className="athlete-avatar">AR</div><div><span className="eyebrow">ATHLETE</span><h1>Alex Rivera</h1><p>Matchday mindset · Week 1</p></div><span className="status-dot"><span /> Active</span></section>
+        <section className="parent-summary-card"><div className="summary-heading"><div><span className="eyebrow">THIS WEEK</span><h2>Building composure</h2></div><CalendarDays size={22} /></div><div className="completion-row"><div className="completion-ring"><strong>5/7</strong><span>days</span></div><div><strong>Consistent rhythm</strong><p>Alex has completed five mindset reps this week.</p><div className="completion-dots">{[1, 1, 1, 1, 1, 0, 0].map((done, index) => <span className={done ? "done" : ""} key={index} />)}</div></div></div></section>
+        <section className="parent-metrics-grid" aria-label="Athlete progress metrics">
+          <div className="parent-metric mint"><div className="parent-metric-icon"><Sparkles size={19} /></div><span className="eyebrow">MOOD TREND</span><strong>Improving</strong><small>More settled after reps</small><div className="trend-line"><span /><span /><span /><span /><span /></div></div>
+          <div className="parent-metric violet"><div className="parent-metric-icon"><Brain size={19} /></div><span className="eyebrow">COMPOSURE</span><strong>82</strong><small>+8 this week</small><div className="score-bar"><span /></div></div>
+          <div className="parent-metric blue"><div className="parent-metric-icon"><Flame size={19} /></div><span className="eyebrow">CURRENT STREAK</span><strong>4 days</strong><small>Best: 5 days</small><div className="streak-dots"><span /><span /><span /><span /><span /><span /></div></div>
+          <div className="parent-metric coral"><div className="parent-metric-icon"><Headphones size={19} /></div><span className="eyebrow">LAST REP</span><strong>5 min</strong><small>Nerves = Performance</small><span className="last-rep-label">Completed today</span></div>
+        </section>
+        <section className="conversation-section"><div className="section-row"><div><span className="eyebrow">CONVERSATION STARTERS</span><h2>Open the door, don’t grade the rep.</h2></div><MessageCircle size={22} /></div>
+          <div className="conversation-card featured"><div className="conversation-icon"><MessageCircle size={21} /></div><div><span className="eyebrow">TRY THIS TONIGHT</span><strong>“What helped you reset today?”</strong><p>Invite a story, not a score.</p></div><ChevronRight size={18} /></div>
+          <div className="conversation-card"><div className="conversation-icon secondary"><Trophy size={20} /></div><div><span className="eyebrow">NOTICE THE EFFORT</span><strong>“I noticed you made time for your rep.”</strong><p>Reinforce consistency over outcome.</p></div><ChevronRight size={18} /></div>
+          <div className="conversation-card"><div className="conversation-icon blue-icon"><Zap size={20} /></div><div><span className="eyebrow">BEFORE MATCHDAY</span><strong>“Which cue do you want to carry with you?”</strong><p>Help Alex choose their own anchor.</p></div><ChevronRight size={18} /></div>
+        </section>
+        <section className="parent-note"><div className="note-icon"><LockKeyhole size={17} /></div><p>Private by design. This view shares progress patterns, not session transcripts or answers.</p></section>
+      </main>
+      <NavBar active="profile" onNavigate={onNavigate} />
     </div>
   );
 }
@@ -312,10 +344,11 @@ export default function Home() {
   return (
     <div className="prototype-frame">
       <div className="phone-shell">
-        {screen === "hq" && <HQScreen onStart={() => setScreen("setup")} onSetup={() => setScreen("setup")} onNavigate={navigate} />}
+        {screen === "hq" && <HQScreen onStart={() => setScreen("setup")} onSetup={() => setScreen("setup")} onParent={() => setScreen("parent")} onNavigate={navigate} />}
         {screen === "setup" && <SetupScreen mode={mode} setMode={setMode} music={music} setMusic={setMusic} onBack={() => setScreen("hq")} onStart={() => setScreen("player")} />}
         {screen === "player" && <PlayerScreen mode={mode} music={music} onBack={() => setScreen("setup")} onComplete={() => setScreen("complete")} />}
         {screen === "complete" && <CompleteScreen onHome={() => setScreen("hq")} />}
+        {screen === "parent" && <ParentDashboard onBack={() => setScreen("hq")} onNavigate={navigate} />}
       </div>
       {toast && <div className="toast" role="status">{toast}</div>}
     </div>

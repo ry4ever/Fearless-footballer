@@ -5,8 +5,8 @@ import {
   useEffect,
   useMemo,
   useState,
-  type PropsWithChildren,
 } from "react";
+import type { PropsWithChildren } from "react";
 import { ActivityIndicator, Text, View } from "react-native";
 import { Redirect } from "expo-router";
 import { canAthleteAccessSession, canCaregiverAccessDashboard } from "./lib/sessionGuard";
@@ -16,7 +16,7 @@ import {
   signOutSession,
   type LoadedSessionState,
 } from "./lib/sessionStore";
-import { switchAccountRole } from "./lib/localBetaApi";
+import { getApiFacade } from "./lib/apiFacade";
 
 interface SessionContextValue {
   state: LoadedSessionState | null;
@@ -62,7 +62,8 @@ export function SessionProvider({ children }: PropsWithChildren) {
         const nextState = await refresh();
         return nextState;
       }
-      await switchAccountRole(role);
+      const api = getApiFacade({ role: "athlete" });
+      await api.switchAccountRole(role);
       return refresh();
     },
     [refresh],

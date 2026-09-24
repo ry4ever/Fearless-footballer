@@ -293,6 +293,38 @@ export function SessionMetadataCard({ session }: { session: SessionPackage }) {
   );
 }
 
+export function ProgressBar({
+  value,
+  maximumValue = 100,
+  label,
+  testID,
+}: {
+  value: number;
+  maximumValue?: number;
+  label?: string;
+  testID?: string;
+}) {
+  const safeMaximum = Math.max(0, maximumValue);
+  const percentage = safeMaximum > 0 ? clamp(value / safeMaximum, 0, 1) : 0;
+  return (
+    <View testID={testID}>
+      <View style={styles.progressBarTrack}>
+        <View
+          style={[
+            styles.progressBarFill,
+            { width: `${Math.round(percentage * 100)}%` },
+          ]}
+        />
+      </View>
+      {label ? <Text style={styles.progressLabel}>{label}</Text> : null}
+    </View>
+  );
+}
+
+function clamp(value: number, minimum: number, maximum: number) {
+  return Math.min(maximum, Math.max(minimum, value));
+}
+
 export function PrivacyNotice({ compact = false }: { compact?: boolean }) {
   return (
     <View
@@ -553,6 +585,22 @@ const styles = StyleSheet.create({
     color: colors.muted,
     fontSize: 13,
     lineHeight: 20,
+  },
+  progressBarTrack: {
+    height: 8,
+    borderRadius: 999,
+    backgroundColor: "#1B2948",
+    overflow: "hidden",
+  },
+  progressBarFill: {
+    height: "100%",
+    borderRadius: 999,
+    backgroundColor: colors.cyan,
+  },
+  progressLabel: {
+    color: colors.muted,
+    fontSize: 12,
+    marginTop: 6,
   },
   loadingRow: {
     flexDirection: "row",

@@ -1,0 +1,62 @@
+---
+# Full athlete journey: register, age gate, home, and sign-out.
+
+- launchApp:
+    clearApp: true
+
+- tap:
+    id: "get-started-button"
+
+- tap:
+    id: "athlete-role-button"
+    text: "I am an athlete"
+
+- assertVisible:
+    id: "athlete-register-screen"
+    text: "Create your private space"
+
+# Select "Create" mode (first mode button - default selected)
+- tap:
+    text: "Create"
+
+# Fill registration form using accessibility labels
+- fillInputs:
+    - text: "Alex Rivera"
+      accessibilityLabel: "Display name"
+    - text: "alex@example.com"
+      accessibilityLabel: "Email"
+    - text: "AthletePassword123!"
+      accessibilityLabel: "Password"
+    - text: "2010-06-15"
+      accessibilityLabel: "Date of birth"
+    - text: "America/New_York"
+      accessibilityLabel: "Timezone"
+
+# Tap consent checkbox
+- tap:
+    accessibilityLabel: "I understand the privacy notice"
+
+# Submit registration
+- tap:
+    text: "Continue"
+
+# Age gate screen
+- assertVisible:
+    id: "athlete-age-gate-screen"
+
+- tap:
+    text: "Open athlete home"
+
+# Athlete home screen
+- assertVisible:
+    id: "athlete-home-screen"
+    text: "Your private rehearsal space"
+
+# Sign out
+- tap:
+    text: "Sign out"
+
+# Back to welcome
+- assertVisible:
+    id: "welcome-screen"
+    text: "A private rehearsal space for young footballers"

@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Redirect, useRouter } from "expo-router";
-import { createPairingCode } from "../../src/lib/localBetaApi";
+import { getApiFacade } from "../../src/lib/apiFacade";
 import { AthleteAccountGuard, useSession } from "../../src/session";
 import {
   Brand,
@@ -15,6 +15,7 @@ import {
 function PairingCodeContent() {
   const router = useRouter();
   const { state, refresh } = useSession();
+  const api = getApiFacade({ role: "athlete" });
   const [pairingCode, setPairingCode] = useState(state?.pairingCode);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
@@ -23,7 +24,7 @@ function PairingCodeContent() {
     setError("");
     setLoading(true);
     try {
-      const code = await createPairingCode();
+      const code = await api.createPairingCode();
       await refresh();
       setPairingCode({
         code: code.pairingCode,

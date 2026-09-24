@@ -1,0 +1,41 @@
+---
+# Restricted athlete: cannot open session until a caregiver pairing is approved.
+
+- launchApp:
+    clearApp: true
+
+- tap:
+    id: "get-started-button"
+
+- tap:
+    id: "athlete-role-button"
+    text: "I am an athlete"
+
+# Sign in to existing athlete account
+- tap:
+    text: "Sign in"
+
+- fillInputs:
+    - text: "alex@example.com"
+      accessibilityLabel: "Email"
+    - text: "AthletePassword123!"
+      accessibilityLabel: "Password"
+
+- tap:
+    text: "Sign in"
+
+- assertVisible:
+    id: "athlete-home-screen"
+    text: "Your private rehearsal space"
+
+# Try to access restricted state (pairing not approved)
+- tap:
+    text: "Pair with a parent or guardian"
+
+- assertVisible:
+    id: "athlete-restricted-screen"
+    text: "Session access locked"
+
+- assertVisible:
+    id: "restricted-status"
+    text: "No active caregiver relationship is approved for this athlete account."

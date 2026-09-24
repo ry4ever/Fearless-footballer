@@ -11,6 +11,12 @@
     "plugins": [
       "expo-router",
       [
+        "expo-audio",
+        {
+          "enableBackgroundPlayback": true
+        }
+      ],
+      [
         "expo-secure-store",
         {
           "configureAndroidBackup": true,

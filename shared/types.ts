@@ -10,6 +10,26 @@ export type MindsetCategory =
   | "resilience"
   | "performance";
 export type ReflectionFeeling = "clearer" | "steadier" | "more_ready";
+export type FootballPosition =
+  | "striker"
+  | "winger"
+  | "midfielder"
+  | "fullback"
+  | "centre_back"
+  | "goalkeeper";
+export type FootballSkillArea =
+  | "finishing"
+  | "movement"
+  | "hold_up_play"
+  | "first_touch"
+  | "1v1s"
+  | "passing"
+  | "positioning"
+  | "scanning"
+  | "decision_making"
+  | "confidence"
+  | "composure";
+export type RehearsalPhase = "see" | "rehearse" | "become";
 export type PairingRelationship = "parent" | "guardian";
 export type PairingStatus =
   | "unlinked"
@@ -130,7 +150,11 @@ export interface PairingLink {
   pairingCode?: string;
   pairingExpiresAt?: string;
   consentStatus: ConsentStatus;
+  consentPolicyVersion?: string;
+  consentSource?: string;
+  consentActorId?: string;
   consentedAt?: string;
+  consentRevokedAt?: string;
   athleteApprovedAt?: string;
   revokedAt?: string;
 }
@@ -148,6 +172,7 @@ export interface SessionCompletion {
   durationSeconds: number;
   completedAt: string;
   reflection?: Reflection;
+  idempotencyKey?: string;
 }
 
 export interface SessionCompletionRequest {
@@ -167,7 +192,11 @@ export interface OfflineCompletionQueueItem {
   updatedAt: string;
   attempts: number;
   status: CompletionSyncStatus;
+  lastAttemptAt?: string;
+  syncedAt?: string;
   lastError?: string;
+  /** When this item can be retried (for exponential backoff). Stored as ISO timestamp. */
+  nextAttemptAt?: string;
 }
 
 export interface StreakUpdate {
@@ -193,6 +222,11 @@ export interface CompletionSyncResponse {
   streak: StreakUpdate;
   composure: ComposureUpdate;
   weeklyProgress: WeeklyProgress;
+}
+
+export interface OfflineQueueStatus {
+  pending: number;
+  lastSyncedAt?: string;
 }
 
 export interface ComposureMetrics {
@@ -252,6 +286,11 @@ export interface CaregiverDashboardPayload {
       value: number;
       changeWeekly: number;
     };
+    trainingScore?: {
+      value: number;
+      changeWeekly: number;
+      status: string;
+    };
     currentStreak: {
       days: number;
       bestDays: number;
@@ -262,6 +301,17 @@ export interface CaregiverDashboardPayload {
       completedAt: string;
       completedToday: boolean;
     };
+    sessionsTrainedThisWeek?: {
+      title: string;
+      count: number;
+      category: string;
+    }[];
+    developmentAreas?: {
+      technical: boolean;
+      tactical: boolean;
+      mental: boolean;
+    };
+    nextMatch?: string;
   };
   conversationStarters: CaregiverConversationStarter[];
   privacyPolicyNotice: string;
@@ -324,4 +374,35 @@ export interface PlaybackEventRequest {
 
 export interface CaregiverDashboardRequest {
   athleteId: string;
+}
+
+export interface RefreshTokenRequest {
+  refreshToken: string;
+}
+
+export interface RefreshTokenResponse {
+  tokens: AuthTokenSet;
+}
+
+export interface PasswordResetRequest {
+  email: string;
+}
+
+export interface PasswordResetConfirmRequest {
+  token: string;
+  newPassword: string;
+}
+
+export interface DataDeletionRequest {
+  confirmation: string;
+}
+
+export interface ConsentRevocationResponse {
+  linkId: string;
+  status: "revoked";
+  revokedAt?: string;
+}
+
+export interface AccountDeletionRequest {
+  confirmation: "DELETE_MY_ACCOUNT";
 }

@@ -1,0 +1,242 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model AthleteProfile {
+  id             String           @id @default(cuid())
+  userId         String           @unique
+  targetMindset  MindsetCategory  @default(CALM)
+  composureScore Int              @default(70)
+  currentStreak  Int              @default(0)
+  bestStreak     Int              @default(0)
+  lastSessionAt  DateTime?
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+  user           User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  caregiverLinks CaregiverLink[]
+  metricSnapshots MetricSnapshot[]
+}
+
+model AuditLog {
+  id         String   @id @default(cuid())
+  userId     String?
+  action     String
+  entityType String
+  entityId   String
+  ipAddress  String?
+  userAgent  String?
+  timestamp  DateTime @default(now())
+  details    Json?
+  user       User?    @relation(fields: [userId], references: [id])
+
+  @@index([userId, action])
+}
+
+model CaregiverLink {
+  id                   String         @id @default(cuid())
+  athleteId            String
+  caregiverUserId      String
+  relationship         String
+  status               LinkStatus     @default(PENDING)
+  pairingCodeHash      String?        @unique
+  pairingExpiresAt     DateTime?
+  athleteApprovedAt    DateTime?
+  coppaConsent         Boolean        @default(false)
+  consentPolicyVersion String         @default("beta-v1")
+  consentSource        String         @default("caregiver_claim")
+  consentActorId       String?
+  consentedAt          DateTime?
+  consentRevokedAt     DateTime?
+  revokedAt            DateTime?
+  createdAt            DateTime       @default(now())
+  updatedAt            DateTime       @updatedAt
+  athlete       AthleteProfile @relation(fields: [athleteId], references: [id], onDelete: Cascade)
+  caregiverUser User           @relation(fields: [caregiverUserId], references: [id], onDelete: Cascade)
+
+  @@unique([athleteId, caregiverUserId])
+  @@index([pairingCodeHash])
+  @@index([status, pairingExpiresAt])
+}
+
+model MetricSnapshot {
+  id                String         @id @default(cuid())
+  athleteProfileId  String
+  weekStartDate     DateTime
+  composureScore    Int
+  composureDelta    Int
+  repsCompleted     Int
+  streakDays        Int
+  inferredMoodTrend String
+  createdAt         DateTime       @default(now())
+  AthleteProfile    AthleteProfile @relation(fields: [athleteProfileId], references: [id], onDelete: Cascade)
+
+  @@index([athleteProfileId, weekStartDate])
+}
+
+model Reflection {
+  id               String            @id @default(cuid())
+  completionId     String            @unique
+  feeling          ReflectionFeeling
+  athleteNote      String?
+  createdAt        DateTime          @default(now())
+  sessionCompleted SessionCompleted  @relation(fields: [completionId], references: [id], onDelete: Cascade)
+}
+
+model Session {
+  id               String             @id @default(cuid())
+  slug             String             @unique
+  version          String             @default("1.0.0")
+  title            String
+  subtitle         String
+  category         MindsetCategory
+  defaultDuration  Int
+  mentorName       String
+  mentorTitle      String
+  mentorAvatarUrl  String?
+  heroImageUrl     String?
+  isPublished      Boolean            @default(false)
+  voiceStreamUrl   String
+  musicBedUrl      String?
+  captionsUrl      String?
+  transcriptText   String
+  createdAt        DateTime           @default(now())
+  updatedAt        DateTime           @updatedAt
+  sessionCompletions SessionCompleted[]
+  phases             SessionPhase[]
+  prompts            SessionPrompt[]
+
+  @@index([category, isPublished])
+}
+
+model SessionCompleted {
+  id              String      @id @default(cuid())
+  userId          String
+  sessionId       String
+  mode            SessionMode
+  durationSeconds Int
+  completedAt     DateTime    @default(now())
+  idempotencyKey  String      @unique
+  reflection      Reflection?
+  session         Session     @relation(fields: [sessionId], references: [id])
+  user            User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, completedAt])
+}
+
+model SessionPhase {
+  id           String  @id @default(cuid())
+  sessionId    String
+  phaseNumber  Int
+  label        String
+  startSeconds Int
+  endSeconds   Int
+  session      Session @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  @@unique([sessionId, phaseNumber])
+}
+
+model SessionPrompt {
+  id               String  @id @default(cuid())
+  sessionId        String
+  timestampSeconds Int
+  promptText       String
+  subText          String?
+  session          Session @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  @@index([sessionId, timestampSeconds])
+}
+
+model User {
+  id                    String             @id @default(cuid())
+  email                 String             @unique
+  emailHash             String             @unique
+  passwordHash          String
+  role                  UserRole           @default(ATHLETE)
+  fullName              String
+  birthDateCiphertext   String?
+  timezone              String             @default("UTC")
+  privacyAcknowledgedAt DateTime?
+  resetTokenHash        String?            @unique
+  resetTokenExpires     DateTime?
+  passwordChangedAt     DateTime?
+  failedAttempts        Int                @default(0)
+  lockedUntil           DateTime?
+  refreshVersion        Int                @default(1)
+  createdAt             DateTime           @default(now())
+  updatedAt             DateTime           @updatedAt
+  athleteProfile        AthleteProfile?
+  auditLogs             AuditLog[]
+  caregiverLinks        CaregiverLink[]
+  sessionCompletions    SessionCompleted[]
+  betaFeedbacks         BetaFeedback[]
+
+  @@index([emailHash])
+  @@index([email])
+}
+
+model BetaFeedback {
+  id         String   @id @default(cuid())
+  userId     String?
+  rating     Int      @default(5)
+  category   String   @default("general")
+  message    String
+  appVersion String   @default("1.0.0")
+  deviceInfo String?
+  createdAt  DateTime @default(now())
+  user       User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([userId, createdAt])
+}
+
+enum Role {
+  ATHLETE
+  CAREGIVER
+}
+
+enum CaregiverLinkStatus {
+  PENDING
+  ACTIVE
+  REVOKED
+}
+
+enum PairingRelationship {
+  parent
+  guardian
+}
+
+enum MindsetCategory {
+  CALM
+  FOCUS
+  CONFIDENCE
+  RESILIENCE
+  PERFORMANCE
+}
+
+enum SessionMode {
+  INTERACTIVE
+  GUIDANCE
+  RELAXATION
+}
+
+enum ReflectionFeeling {
+  CLEARER
+  STEADIER
+  MORE_READY
+}
+
+enum LinkStatus {
+  PENDING
+  ACTIVE
+  REVOKED
+}
+
+enum UserRole {
+  ATHLETE
+  CAREGIVER
+  MENTOR_ADMIN
+}

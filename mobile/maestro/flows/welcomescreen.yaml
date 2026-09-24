@@ -1,0 +1,25 @@
+---
+# Smoke test: athlete navigates from welcome → role selection → athlete registration
+# Used to verify the app launches and basic navigation works.
+
+- launchApp:
+    clearApp: true
+
+- assertVisible:
+    id: "welcome-screen"
+    text: "A private rehearsal space for young footballers"
+
+- tap:
+    id: "get-started-button"
+
+- assertVisible:
+    id: "role-screen"
+    text: "Who is this account for?"
+
+- tap:
+    id: "athlete-role-button"
+    text: "I am an athlete"
+
+- assertVisible:
+    id: "athlete-register-screen"
+    text: "Create your private space"

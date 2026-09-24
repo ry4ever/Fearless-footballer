@@ -2,19 +2,24 @@ import { useState } from "react";
 import {
   ArrowRight,
   Bell,
-  Brain,
   Calendar,
   Check,
-  ChevronRight,
-  Crown,
   Flame,
   Info,
   SlidersHorizontal,
-  Target,
   Users,
-  Sparkles,
   Zap,
+  Shield,
+  Crosshair,
+  Footprints,
+  Target,
+  Trophy,
 } from "lucide-react";
+import {
+  BadgeHexIcon,
+  PitchMarkingsGraphic,
+  FearlessHeaderLogo,
+} from "../components/icons/CustomIcons";
 
 interface HQScreenProps {
   onStartRehearsal: () => void;
@@ -23,12 +28,11 @@ interface HQScreenProps {
   onNavigateTab: (tab: string) => void;
 }
 
-const mindsetFilters = [
-  { id: "calm", label: "Calm", icon: Brain },
-  { id: "focus", label: "Focus", icon: Target },
-  { id: "confidence", label: "Confidence", icon: Zap },
-  { id: "resilience", label: "Resilience", icon: Sparkles },
-  { id: "performance", label: "Performance", icon: SlidersHorizontal },
+const workOnCategories = [
+  { id: "technical", label: "Technical", icon: Target, desc: "Finishing, 1v1s, First Touch" },
+  { id: "tactical", label: "Tactical", icon: Footprints, desc: "Movement, Spacing, Positioning" },
+  { id: "match_prep", label: "Match Prep", icon: Shield, desc: "Pre-match focus, Nerves = Performance" },
+  { id: "decisions", label: "Decisions", icon: Crosshair, desc: "Scanning, Tempo, Micro-choices" },
 ];
 
 export function HQScreen({
@@ -36,22 +40,23 @@ export function HQScreen({
   onOpenSetup,
   onOpenParent,
 }: HQScreenProps) {
-  const [activeMindset, setActiveMindset] = useState("calm");
-  const [selectedDay, setSelectedDay] = useState("MON");
+  const [activeCategory, setActiveCategory] = useState("tactical");
+  const [selectedDay, setSelectedDay] = useState("WED");
+  const [recommendedMode, setRecommendedMode] = useState<"training" | "customize">("training");
   const [viewState, setViewState] = useState<"active" | "baseline">("active");
 
   const days = ["MON", "TUE", "WED", "THU", "FRI", "SAT", "SUN"];
 
+  // High quality photo avatar for Alex Rivera (Pro Performance Coach)
+  const coachAvatar = "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150&auto=format&fit=crop&q=80";
+
   return (
-    <div className="screen hq-screen">
+    <div className={`screen hq-screen ${viewState === "baseline" ? "mode-baseline" : "mode-active"}`}>
       <div className="hero-wash" />
 
       {/* Top Header */}
       <header className="hq-header">
-        <div className="brand-lockup-hq">
-          <span className="brand-white">FEARLESS</span>
-          <span className="brand-sub">HQ</span>
-        </div>
+        <FearlessHeaderLogo subtitle="HQ" size="md" />
 
         <div className="header-actions">
           <button
@@ -60,7 +65,7 @@ export function HQScreen({
             onClick={onOpenParent}
             aria-label="Open Caregiver Parent View"
           >
-            <Users size={15} /> Parent view
+            <Users size={14} /> Parent view
           </button>
 
           <button
@@ -68,42 +73,71 @@ export function HQScreen({
             className="icon-button notification-button"
             aria-label="Notifications (0 unread)"
           >
-            <Bell size={21} />
+            <Bell size={20} />
             <span className="notification-badge">0</span>
           </button>
         </div>
       </header>
 
-      {/* State Mode Switcher (Allows testing both Image 2 and Image 4 mockups) */}
+      {/* View Mode Toggle (Active Effort vs Fresh Baseline) */}
       <div className="view-mode-toggle">
-        <span>Preview Mode:</span>
+        <span>Training View:</span>
         <button
           type="button"
           className={`toggle-pill ${viewState === "active" ? "active" : ""}`}
           onClick={() => setViewState("active")}
         >
-          Active (82 Score)
+          Active Programme
         </button>
         <button
           type="button"
           className={`toggle-pill ${viewState === "baseline" ? "active" : ""}`}
           onClick={() => setViewState("baseline")}
         >
-          Baseline (0/1)
+          Fresh Baseline
         </button>
       </div>
 
-      {/* Greeting */}
+      {/* Greeting & Football Context */}
       <section className="greeting">
-        <span className="eyebrow">GOOD EVENING,</span>
-        <h1>Alex</h1>
+        <span className="eyebrow">GOOD EVENING, ALEX</span>
+        <div style={{ display: "flex", alignItems: "center", gap: "8px", marginTop: "2px" }}>
+          <h1 style={{ margin: 0 }}>Fearless HQ</h1>
+          <span style={{ fontSize: "0.75rem", background: "rgba(0,240,255,0.15)", color: "#00F0FF", padding: "2px 8px", borderRadius: "100px", fontWeight: 700 }}>
+            Striker · U14
+          </span>
+        </div>
       </section>
 
-      {/* Performance Metrics Cards */}
-      <section className="metrics-grid" aria-label="Athlete Performance Metrics">
+      {/* Question 1: What am I working on? (Current Focus) */}
+      <section className="current-focus-banner" style={{ background: "rgba(15, 23, 42, 0.7)", border: "1px solid rgba(0, 240, 255, 0.25)", borderRadius: "14px", padding: "14px 18px", margin: "14px 0" }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+          <div>
+            <span className="eyebrow" style={{ color: "#00F0FF", fontSize: "0.7rem", letterSpacing: "1.2px", textTransform: "uppercase" }}>
+              YOUR CURRENT FOCUS
+            </span>
+            <h3 style={{ color: "#fff", fontSize: "1.05rem", fontWeight: 800, margin: "2px 0 0 0" }}>
+              Become More Dangerous in the Box
+            </h3>
+            <span style={{ color: "rgba(255,255,255,0.6)", fontSize: "0.75rem" }}>
+              Striker · 4-week programme (Week 2 of 4)
+            </span>
+          </div>
+          <button
+            type="button"
+            onClick={onOpenSetup}
+            style={{ background: "transparent", border: "none", color: "#00F0FF", cursor: "pointer", display: "flex", alignItems: "center", gap: "4px", fontSize: "0.75rem", fontWeight: 700 }}
+          >
+            Plan <ArrowRight size={13} />
+          </button>
+        </div>
+      </section>
+
+      {/* Performance Metrics: TRAINING SCORE & STREAK */}
+      <section className="metrics-grid" aria-label="Athlete Training Effort">
         {viewState === "active" ? (
           <>
-            {/* Circular Gauge Composure Score (Image 4) */}
+            {/* Training Score Circular Gauge */}
             <div className="metric-card composure-gauge-card">
               <div className="circular-gauge-wrap">
                 <svg className="gauge-svg" viewBox="0 0 100 100" aria-hidden="true">
@@ -118,80 +152,85 @@ export function HQScreen({
                   />
                 </svg>
                 <div className="gauge-inner">
-                  <span className="gauge-label">COMPOSURE SCORE</span>
+                  <span className="gauge-label">TRAINING SCORE</span>
                   <strong className="gauge-number">82</strong>
-                  <Brain size={16} className="gauge-icon" />
+                  <span style={{ fontSize: "0.65rem", color: "#00F0FF", fontWeight: 700, textTransform: "uppercase" }}>High Consistency</span>
                 </div>
               </div>
             </div>
 
-            {/* Current Streak (Image 4) */}
+            {/* Current Streak Active State */}
             <div className="metric-card streak-active-card">
               <div className="streak-header-row">
                 <div className="flame-glow-icon">
-                  <Flame size={28} />
+                  <Flame size={26} />
                 </div>
                 <div>
                   <span className="eyebrow">CURRENT STREAK</span>
-                  <strong className="streak-number">4/5</strong>
+                  <strong className="streak-number">6 Days</strong>
+                  <small style={{ color: "rgba(255,255,255,0.6)", display: "block", fontSize: "0.7rem", marginTop: "2px" }}>
+                    3/4 sessions this week
+                  </small>
                 </div>
               </div>
-              <small className="streak-caption">
-                One more rep to lock in this week’s milestone.
-              </small>
             </div>
           </>
         ) : (
           <>
-            {/* Baseline Composure Score (Image 2) */}
-            <div className="metric-card cyan-edge">
+            <div className="metric-card cyan-edge baseline-metric">
               <div className="metric-icon">
-                <Brain size={25} />
+                <Target size={24} />
               </div>
               <div className="metric-copy">
-                <span className="eyebrow">COMPOSURE SCORE</span>
-                <strong>—</strong>
-                <small>Build your baseline.</small>
+                <span className="eyebrow">TRAINING SCORE</span>
+                <strong className="baseline-dash">—</strong>
+                <small>Complete training to build consistency.</small>
               </div>
-              <Info className="metric-help" size={16} />
+              <Info className="metric-help" size={15} />
             </div>
 
-            {/* Baseline Streak (Image 2) */}
-            <div className="metric-card purple-edge">
-              <div className="metric-icon">
-                <Flame size={27} />
+            <div className="metric-card purple-edge baseline-metric">
+              <div className="metric-icon pink-flame">
+                <Flame size={25} />
               </div>
               <div className="metric-copy">
                 <span className="eyebrow">CURRENT STREAK</span>
-                <strong>0/1</strong>
-                <small>Complete a session to start your streak.</small>
+                <strong className="baseline-score">0/1</strong>
+                <small>Train today to start your streak.</small>
               </div>
-              <Info className="metric-help" size={16} />
+              <Info className="metric-help" size={15} />
             </div>
           </>
         )}
       </section>
 
-      {/* Today's Fearless Rep Card */}
-      <section className="rep-card" aria-label="Today's Fearless Rep">
+      {/* Question 2: What am I training today? (Today's Off-Pitch Training) */}
+      <section className="rep-card" aria-label="Today's Off-Pitch Training">
         <div
           className="rep-cover"
           style={{
-            backgroundImage: `linear-gradient(90deg, rgba(5,13,33,.98) 0%, rgba(5,13,33,.82) 48%, rgba(5,13,33,.25) 100%), url('/assets/hq-active-screen.jpg')`,
+            backgroundImage: `linear-gradient(90deg, rgba(5,13,33,.98) 0%, rgba(5,13,33,.82) 48%, rgba(5,13,33,.2) 100%), url('/assets/hq-active-screen.jpg')`,
             backgroundPosition: "top right",
           }}
         />
         <div className="rep-content">
           <div className="rep-header-pill">
-            <span className="eyebrow">TODAY’S FEARLESS REP</span>
+            <span className="eyebrow">TODAY'S OFF-PITCH TRAINING</span>
           </div>
 
-          <h2>Nerves =<br />Performance</h2>
+          <div className="rep-title-row">
+            <div className="rep-target-badge">
+              <Footprints size={20} />
+            </div>
+            <h2>Finding Space<br />Between Centre-Backs</h2>
+          </div>
 
           <div className="rep-meta">
-            <span><Target size={16} /> 5 min</span>
+            <span style={{ color: "#00F0FF", fontWeight: 700 }}>Tactical</span>
             <span className="meta-divider">|</span>
-            <span><Brain size={16} /> Composure</span>
+            <span className="composure-tag"><Footprints size={14} /> Movement</span>
+            <span className="meta-divider">|</span>
+            <span>SEE · REHEARSE · BECOME</span>
           </div>
 
           <button
@@ -199,127 +238,176 @@ export function HQScreen({
             className="primary-button rep-cta-button"
             onClick={onStartRehearsal}
           >
-            Start rehearsal <ArrowRight size={19} />
+            Start Training <ArrowRight size={18} />
           </button>
         </div>
 
         <div className="rep-check" aria-label="Verified recommendation">
-          <Check size={16} strokeWidth={3} />
+          <Check size={14} strokeWidth={3} />
         </div>
       </section>
 
-      {/* Horizontal 3-Card Shelf (Image 4) */}
-      <section className="horizontal-shelf-section" aria-label="Shortcuts & Milestones">
-        <div className="horizontal-shelf-scroll">
-          {/* Card 1: 7-Day Blueprint */}
-          <button
-            type="button"
-            className="shelf-card blueprint-shelf-card"
-            onClick={onOpenSetup}
-          >
-            <div className="shelf-card-top">
-              <div className="shelf-icon blue">
-                <Calendar size={18} />
-              </div>
-              <span className="shelf-pill blue">7-DAY PLAN</span>
-            </div>
-            <strong>Your 7-day blueprint</strong>
-            <p>Build composure, sharpen focus.</p>
-            <div className="shelf-arrow">
-              <ArrowRight size={15} />
-            </div>
-          </button>
-
-          {/* Card 2: Mentor Matthew McConaughey */}
-          <button
-            type="button"
-            className="shelf-card mentor-shelf-card"
-            onClick={onStartRehearsal}
-          >
-            <div className="shelf-card-top">
-              <div className="shelf-avatar">MM</div>
-              <span className="shelf-pill purple">MENTOR</span>
-            </div>
-            <strong>Matthew McConaughey</strong>
-            <p>The Power of Presence</p>
-            <div className="shelf-arrow">
-              <ArrowRight size={15} />
-            </div>
-          </button>
-
-          {/* Card 3: Recent Badge */}
-          <div className="shelf-card badge-shelf-card">
-            <div className="shelf-card-top">
-              <div className="shelf-icon cyan">
-                <Crown size={18} />
-              </div>
-              <span className="shelf-pill purple">RECENT BADGE</span>
-            </div>
-            <strong>Focus Builder</strong>
-            <p>Complete 3 reps in a row</p>
-            <div className="shelf-arrow badge-check">
-              <Check size={14} strokeWidth={3} />
-            </div>
+      {/* Question 3: Am I staying consistent? (Programme Progress & Matchday Cadence) */}
+      <section className="consistency-summary-card" style={{ background: "rgba(15, 23, 42, 0.7)", border: "1px solid rgba(255,255,255,0.08)", borderRadius: "14px", padding: "16px", margin: "14px 0" }}>
+        <span className="eyebrow" style={{ color: "rgba(255,255,255,0.5)", fontSize: "0.7rem", letterSpacing: "1px" }}>
+          WEEKLY TRAINING PROGRESS
+        </span>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px", marginTop: "10px" }}>
+          <div style={{ background: "rgba(255,255,255,0.03)", padding: "10px 14px", borderRadius: "10px", border: "1px solid rgba(255,255,255,0.05)" }}>
+            <span style={{ fontSize: "0.75rem", color: "rgba(255,255,255,0.6)" }}>This Week</span>
+            <strong style={{ display: "block", color: "#fff", fontSize: "1.1rem", fontWeight: 800 }}>3 of 4 Sessions</strong>
+            <small style={{ color: "#00F0FF", fontSize: "0.7rem" }}>On track for matchday</small>
+          </div>
+          <div style={{ background: "rgba(255,255,255,0.03)", padding: "10px 14px", borderRadius: "10px", border: "1px solid rgba(255,255,255,0.05)" }}>
+            <span style={{ fontSize: "0.75rem", color: "rgba(255,255,255,0.6)" }}>Next Match</span>
+            <strong style={{ display: "block", color: "#fff", fontSize: "1.1rem", fontWeight: 800 }}>Saturday</strong>
+            <small style={{ color: "#a855f7", fontSize: "0.7rem" }}>Pre-match rehearsal due Fri</small>
           </div>
         </div>
       </section>
 
-      {/* 7-Day Blueprint Selector */}
-      <section className="blueprint-section">
-        <div className="section-row">
-          <div>
-            <span className="eyebrow">7-DAY BLUEPRINT</span>
-            <h3>Your starting rhythm</h3>
-          </div>
-          <div className="mode-pill">
-            <span><Target size={14} /> Recommended</span>
-            <button type="button" onClick={onOpenSetup}>
-              <SlidersHorizontal size={13} /> Customize
+      {/* Horizontal Shelf: Training Library, Train With The Pros, Badges */}
+      {viewState === "active" && (
+        <section className="horizontal-shelf-section" aria-label="Shortcuts & Milestones">
+          <div className="horizontal-shelf-scroll">
+            {/* Card 1: Training Plan */}
+            <button
+              type="button"
+              className="shelf-card blueprint-shelf-card"
+              onClick={onOpenSetup}
+            >
+              <PitchMarkingsGraphic />
+              <div className="shelf-card-top">
+                <div className="shelf-icon blue">
+                  <Calendar size={16} />
+                </div>
+                <span className="shelf-pill blue">YOUR PROGRAMME</span>
+              </div>
+              <strong>Striker Plan: Box Mastery</strong>
+              <p>Week 2 of 4 · Tactical Spacing</p>
+              <div className="shelf-arrow">
+                <ArrowRight size={14} />
+              </div>
             </button>
+
+            {/* Card 2: Train With The Pros */}
+            <button
+              type="button"
+              className="shelf-card mentor-shelf-card"
+              onClick={onStartRehearsal}
+            >
+              <div className="shelf-card-top">
+                <img
+                  src={coachAvatar}
+                  alt="Alex Rivera"
+                  className="shelf-avatar-img"
+                />
+                <span className="shelf-pill purple">PRO REHEARSAL</span>
+              </div>
+              <strong>Train With The Pros</strong>
+              <p>Beating Your Defender 1v1</p>
+              <div className="shelf-arrow">
+                <ArrowRight size={14} />
+              </div>
+            </button>
+
+            {/* Card 3: Recent Training Milestone */}
+            <div className="shelf-card badge-shelf-card">
+              <div className="shelf-card-top">
+                <div className="shelf-icon cyan glow-hex">
+                  <BadgeHexIcon size={18} />
+                </div>
+                <span className="shelf-pill purple">MILESTONE</span>
+              </div>
+              <strong>Box Hunter Level 2</strong>
+              <p>Completed 5 movement rehearsals</p>
+              <div className="shelf-arrow badge-check">
+                <Check size={13} strokeWidth={3} />
+              </div>
+            </div>
           </div>
+        </section>
+      )}
+
+      {/* Choose What To Work On (Replaces Browse by Mindset) */}
+      <section className="mindset-filter-section" aria-label="Choose What To Work On">
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" }}>
+          <span className="eyebrow section-eyebrow" style={{ color: "#fff", fontWeight: 700 }}>
+            CHOOSE WHAT TO WORK ON
+          </span>
+          <span style={{ fontSize: "0.75rem", color: "#00F0FF" }}>Training Library</span>
         </div>
 
-        <div className="days-row" role="tablist" aria-label="Blueprint days">
-          {days.map((item, index) => {
-            const isSelected = selectedDay === item;
-            const isDone = index < 4;
+        <div className="mindset-pill-track">
+          {workOnCategories.map(({ id, label, icon: Icon }) => {
+            const isActive = activeCategory === id;
             return (
               <button
-                key={item}
+                key={id}
                 type="button"
-                className={`day-button ${isSelected ? "selected" : ""} ${isDone ? "completed" : ""}`}
-                onClick={() => setSelectedDay(item)}
-                role="tab"
-                aria-selected={isSelected}
+                className={`mindset-pill ${isActive ? "active" : ""}`}
+                onClick={() => setActiveCategory(id)}
               >
-                {isDone ? (
-                  <Check size={13} strokeWidth={3} className="done-check" />
-                ) : (
-                  <span className="day-dot" />
-                )}
-                <b>{item}</b>
-                <small>{index === 0 ? "5m" : index === 2 ? "Rest" : "5m"}</small>
+                <Icon size={14} />
+                <span>{label}</span>
               </button>
             );
           })}
         </div>
       </section>
 
-      {/* Browse by Mindset Filter Bar (Image 4) */}
-      <section className="mindset-filter-section" aria-label="Browse by mindset">
-        <span className="eyebrow section-eyebrow">BROWSE BY MINDSET</span>
-        <div className="mindset-pill-track">
-          {mindsetFilters.map(({ id, label, icon: Icon }) => {
-            const isActive = activeMindset === id;
+      {/* Days Training Schedule */}
+      <section className="blueprint-section" style={{ marginTop: "16px" }}>
+        <div className="section-row">
+          <div>
+            <span className="eyebrow">OFF-PITCH SCHEDULE</span>
+          </div>
+          <div className="recommended-mode-group">
+            <span className="mode-group-label">SCHEDULE VIEW</span>
+            <div className="mode-pills-wrap">
+              <button
+                type="button"
+                className={`mode-toggle-chip ${recommendedMode === "training" ? "active" : ""}`}
+                onClick={() => setRecommendedMode("training")}
+              >
+                <Target size={12} /> Training
+              </button>
+              <button
+                type="button"
+                className={`mode-toggle-chip ${recommendedMode === "customize" ? "active" : ""}`}
+                onClick={() => {
+                  setRecommendedMode("customize");
+                  onOpenSetup();
+                }}
+              >
+                <SlidersHorizontal size={12} /> Match Schedule
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <div className="days-row" role="tablist" aria-label="Weekly training days">
+          {days.map((item) => {
+            const isSelected = selectedDay === item;
             return (
               <button
-                key={id}
+                key={item}
                 type="button"
-                className={`mindset-pill ${isActive ? "active" : ""}`}
-                onClick={() => setActiveMindset(id)}
+                className={`day-button ${isSelected ? "selected" : ""}`}
+                onClick={() => setSelectedDay(item)}
+                role="tab"
+                aria-selected={isSelected}
               >
-                <Icon size={14} />
-                <span>{label}</span>
+                <div className="day-top-indicator">
+                  {isSelected ? (
+                    <div className="selected-check-badge">
+                      <Check size={11} strokeWidth={3} />
+                    </div>
+                  ) : (
+                    <span className="hollow-day-circle" />
+                  )}
+                </div>
+                <b>{item}</b>
               </button>
             );
           })}

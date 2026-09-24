@@ -1,0 +1,50 @@
+{
+  "expo": {
+    "name": "Fearless HQ",
+    "slug": "fearless-hq",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./client/public/assets/fearless-logo.png",
+    "userInterfaceStyle": "dark",
+    "splash": {
+      "image": "./client/public/assets/fearless-logo.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#050a19"
+    },
+    "assetBundlePatterns": [
+      "**/*"
+    ],
+    "ios": {
+      "supportsTablet": false,
+      "bundleIdentifier": "com.fearlessfootballer.app",
+      "infoPlist": {
+        "UIBackgroundModes": [
+          "audio"
+        ],
+        "NSMicrophoneUsageDescription": "Fearless HQ does not record audio.",
+        "ITSAppUsesNonExemptEncryption": false
+      }
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./client/public/assets/fearless-logo.png",
+        "backgroundColor": "#050a19"
+      },
+      "package": "com.fearlessfootballer.app",
+      "permissions": [
+        "RECEIVE_BOOT_COMPLETED",
+        "FOREGROUND_SERVICE",
+        "INTERNET"
+      ]
+    },
+    "web": {
+      "favicon": "./client/public/assets/fearless-logo.png",
+      "bundler": "vite"
+    },
+    "extra": {
+      "eas": {
+        "projectId": "fearless-hq-prototype"
+      }
+    }
+  }
+}

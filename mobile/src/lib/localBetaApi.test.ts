@@ -1,4 +1,20 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+
+vi.mock("react-native", () => ({}));
+vi.mock("expo-network", () => ({
+  getNetworkStateAsync: vi.fn(),
+  addNetworkStateListener: vi.fn(() => ({ remove: vi.fn() })),
+}));
+vi.mock("expo-secure-store", () => ({
+  getItemAsync: vi.fn(),
+  setItemAsync: vi.fn(),
+  deleteItemAsync: vi.fn(),
+}));
+vi.mock("@react-native-async-storage/async-storage", () => ({
+  getItem: vi.fn(),
+  setItem: vi.fn(),
+  removeItem: vi.fn(),
+}));
 import type {
   AuthTokenSet,
   BetaUserRole,
@@ -9,6 +25,7 @@ import type {
   LocalCredential,
   PersistedSessionState,
 } from "./sessionStore";
+import { createLocalBetaApi, LocalApiError } from "./localBetaApi";
 
 const storage = vi.hoisted(() => ({
   state: {} as PersistedSessionState,
@@ -30,7 +47,6 @@ vi.mock("./sessionStore", () => ({
   saveSessionState: mocks.saveSessionState,
 }));
 
-import { createLocalBetaApi, LocalApiError } from "./localBetaApi";
 
 function loadedState() {
   const role = storage.state.currentRole;

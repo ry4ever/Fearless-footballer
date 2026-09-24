@@ -1,11 +1,7 @@
 import { useState } from "react";
 import { Pressable, Text, View } from "react-native";
 import { useRouter } from "expo-router";
-import {
-  LocalApiError,
-  registerAccount,
-  signInAccount,
-} from "../../src/lib/localBetaApi";
+import { getApiFacade, LocalApiError } from "../../src/lib/apiFacade";
 import { useSession } from "../../src/session";
 import {
   Brand,
@@ -22,6 +18,7 @@ type Mode = "register" | "signin";
 export default function CaregiverRegisterScreen() {
   const router = useRouter();
   const { refresh } = useSession();
+  const api = getApiFacade({ role: "caregiver" });
   const [mode, setMode] = useState<Mode>("register");
   const [displayName, setDisplayName] = useState("");
   const [email, setEmail] = useState("");
@@ -44,7 +41,7 @@ export default function CaregiverRegisterScreen() {
     setLoading(true);
     try {
       if (mode === "register") {
-        await registerAccount({
+        await api.registerAccount({
           role: "caregiver",
           displayName,
           email,
@@ -52,7 +49,7 @@ export default function CaregiverRegisterScreen() {
           privacyAcknowledged: true,
         });
       } else {
-        await signInAccount({
+        await api.signInAccount({
           role: "caregiver",
           email,
           password,

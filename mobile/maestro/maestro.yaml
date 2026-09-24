@@ -1,0 +1,24 @@
+# Maestro config for Fearless Footballer mobile E2E tests.
+#
+# Run from the mobile directory:
+#   maestro run mobile/maestro/flows
+#
+# Requires a development build (not Expo Go) for native auth/audio behavior.
+# Build first with:
+#   npx expo prebuild
+#   npx expo run:android --variant debug
+#   npx expo run:ios --configuration Debug
+
+app:
+  id: com.fearlessfootballer.app
+  # Path to a built APK/IPA, or leave unset to use the latest debug build.
+  file: null
+
+env:
+  EXPO_PUBLIC_API_MODE: local
+
+# Global timeout for each flow step (ms)
+timeout: 60000
+
+# Retry flaky device operations
+retry: 2

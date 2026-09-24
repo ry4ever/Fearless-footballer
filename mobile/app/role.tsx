@@ -81,6 +81,12 @@ export default function RoleScreen() {
           accessibilityLabel="Back to welcome"
         />
       )}
+      <Button
+        label="Privacy policy"
+        variant="quiet"
+        onPress={() => router.push("/privacy-policy")}
+        accessibilityLabel="Open privacy policy"
+      />
       <PrivacyNotice compact />
     </Screen>
   );

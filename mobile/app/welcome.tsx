@@ -13,6 +13,12 @@ export default function WelcomeScreen() {
         copy="Build composure through one focused session at a time. Athletes keep reflections private; caregivers see only consented progress patterns."
       />
       <Button
+        label="Privacy policy"
+        variant="quiet"
+        onPress={() => router.push("/privacy-policy")}
+        accessibilityLabel="Open privacy policy"
+      />
+      <Button
         label="Get started"
         onPress={() => router.push("/role")}
         accessibilityLabel="Get started"

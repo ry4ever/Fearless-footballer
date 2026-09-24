@@ -1,10 +1,14 @@
-import { sampleSessionPackage } from "../../../shared/sampleSession";
 import type {
   AgeGateRequest,
   AgeGateResponse,
+  AthleteProgress,
   AuthTokenSet,
   BetaUserRole,
   CaregiverDashboardPayload,
+  CompletionSyncResponse,
+  ConsentRevocationResponse,
+  DataDeletionRequest,
+  OfflineQueueStatus,
   PairingApprovalRequest,
   PairingApprovalResponse,
   PairingClaimRequest,
@@ -12,12 +16,34 @@ import type {
   PairingCode,
   PairingCodeResponse,
   PairingLink,
+  PlaybackEventRequest,
   RegisterAccountRequest,
   RegisterAccountResponse,
+  SessionCompletion,
+  SessionCompletionRequest,
   SessionRetrieveResponse,
   SignInAccountRequest,
   UserAccount,
 } from "../../../shared/types";
+import type {
+  CompletionIdempotencyRecord,
+  LoadedSessionState,
+  LocalCredential,
+  PersistedSessionState,
+} from "./sessionStore";
+import { sampleSessionPackage } from "../../../shared/sampleSession";
+import {
+  buildCompletionSyncResponse,
+  calculateAthleteProgress,
+} from "./metrics";
+import {
+  createOfflineCompletionQueueItem,
+  findOfflineCompletionQueueItem,
+  getOfflineCompletionQueueStatus as getQueueStatusFromState,
+  hasInternetConnection,
+  updateOfflineCompletionQueueItem,
+  upsertOfflineCompletionQueueItem,
+} from "./offlineCompletionQueue";
 import {
   activatePairing,
   canAthleteAccessSession,
@@ -28,12 +54,12 @@ import {
   revokePairing as revokePairingLink,
 } from "./sessionGuard";
 import {
+  clearPendingCompletionKey,
   clearSessionState,
-  type LoadedSessionState,
-  type LocalCredential,
-  type PersistedSessionState,
+  getOrCreatePendingCompletionKey,
   loadSessionState,
   readLocalCredential,
+  savePlaybackProgress,
   saveSessionState,
 } from "./sessionStore";
 
@@ -50,9 +76,22 @@ export interface LocalBetaApi {
   ): Promise<PairingApprovalResponse>;
   revokePairing(linkId: string): Promise<PairingApprovalResponse>;
   getAthleteSession(): Promise<SessionRetrieveResponse>;
+  recordPlaybackEvent(
+    sessionId: string,
+    request: PlaybackEventRequest,
+  ): Promise<void>;
+  completeSession(
+    sessionId: string,
+    request: SessionCompletionRequest,
+  ): Promise<CompletionSyncResponse>;
+  syncOfflineCompletions(): Promise<{ synced: number; failed: number }>;
+  getAthleteProgress(): Promise<AthleteProgress>;
+  getOfflineQueueStatus(): Promise<OfflineQueueStatus>;
   getCaregiverDashboard(
     athleteId: string,
   ): Promise<CaregiverDashboardPayload>;
+  revokeConsent(linkId: string): Promise<ConsentRevocationResponse>;
+  deleteAccount(request: DataDeletionRequest): Promise<void>;
   resetLocalBetaState(): Promise<void>;
 }
 
@@ -65,6 +104,7 @@ export interface LocalBetaApiDependencies {
   ) => Promise<void>;
   clearSessionState?: () => Promise<void>;
   readLocalCredential?: (role: BetaUserRole) => Promise<LocalCredential | null>;
+  isOnline?: () => Promise<boolean>;
   now?: () => Date;
 }
 
@@ -198,6 +238,248 @@ function persistWithRole(
   return { ...state, currentRole: role };
 }
 
+function requireAthleteAccess(state: LoadedSessionState) {
+  const athlete = requireCurrentAccount(state, "athlete");
+  if (!canAthleteAccessSession(athlete, state.pairing)) {
+    throw new LocalApiError("Complete consent and pairing before opening a session.", 403);
+  }
+  return athlete;
+}
+
+function requireAthleteAccountForSync(state: LoadedSessionState) {
+  const athlete = requireAccount(state, "athlete");
+  if (!canAthleteAccessSession(athlete, state.pairing)) {
+    throw new LocalApiError("Athlete session access is not active.", 403);
+  }
+  return athlete;
+}
+
+function validateReflection(request: SessionCompletionRequest) {
+  if (!request.reflection) return;
+  if (
+    request.reflection.feeling !== "clearer" &&
+    request.reflection.feeling !== "steadier" &&
+    request.reflection.feeling !== "more_ready"
+  ) {
+    throw new LocalApiError("Choose how you feel after the rehearsal.", 422);
+  }
+  if (
+    request.reflection.note !== undefined &&
+    (typeof request.reflection.note !== "string" || request.reflection.note.length > 1000)
+  ) {
+    throw new LocalApiError("Keep the private note under 1,000 characters.", 422);
+  }
+}
+
+function requestsMatch(
+  left: SessionCompletionRequest,
+  right: SessionCompletionRequest,
+) {
+  return (
+    left.sessionId === right.sessionId &&
+    left.sessionVersion === right.sessionVersion &&
+    left.mode === right.mode &&
+    left.completionDurationSeconds === right.completionDurationSeconds &&
+    left.completedAt === right.completedAt &&
+    left.idempotencyKey === right.idempotencyKey &&
+    JSON.stringify(left.reflection ?? null) ===
+      JSON.stringify(right.reflection ?? null)
+  );
+}
+
+function validateCompletionRequest(
+  state: LoadedSessionState,
+  sessionId: string,
+  request: SessionCompletionRequest,
+) {
+  if (request.sessionId !== sessionId || request.sessionId !== sampleSessionPackage.id) {
+    throw new LocalApiError("This completion does not match the beta session.", 404);
+  }
+  if (request.sessionVersion !== sampleSessionPackage.version) {
+    throw new LocalApiError("This session version is no longer available.", 404);
+  }
+  if (request.mode !== "interactive") {
+    throw new LocalApiError("Only interactive mode is available in this beta.", 422);
+  }
+  if (
+    !Number.isFinite(request.completionDurationSeconds) ||
+    request.completionDurationSeconds < 0 ||
+    request.completionDurationSeconds > sampleSessionPackage.defaultDurationSeconds + 1
+  ) {
+    throw new LocalApiError("Enter a valid playback duration.", 422);
+  }
+  const threshold = sampleSessionPackage.defaultDurationSeconds * 0.8;
+  if (request.completionDurationSeconds < threshold) {
+    throw new LocalApiError(
+      `Complete at least ${Math.round(threshold)} seconds of playback before finishing.`,
+      422,
+    );
+  }
+  if (!request.idempotencyKey?.trim()) {
+    throw new LocalApiError("A completion idempotency key is required.", 422);
+  }
+  if (!request.completedAt || Number.isNaN(Date.parse(request.completedAt))) {
+    throw new LocalApiError("Enter a valid completion timestamp.", 422);
+  }
+  validateReflection(request);
+
+  const existing = state.completionIdempotency?.[request.idempotencyKey];
+  if (existing && !requestsMatch(existing.request, request)) {
+    throw new LocalApiError(
+      "This idempotency key was already used for a different completion.",
+      409,
+    );
+  }
+}
+
+function applyCompletion(
+  state: PersistedSessionState,
+  athlete: UserAccount,
+  request: SessionCompletionRequest,
+  now: () => Date,
+): {
+  state: PersistedSessionState;
+  response: CompletionSyncResponse;
+} {
+  const existing = state.completionIdempotency?.[request.idempotencyKey];
+  if (existing) {
+    return { state, response: existing.response };
+  }
+
+  const allocation = allocateSequence(state);
+  const completion: SessionCompletion = {
+    id: allocation.id("cmp"),
+    sessionId: request.sessionId,
+    sessionVersion: request.sessionVersion,
+    mode: request.mode,
+    durationSeconds: request.completionDurationSeconds,
+    completedAt: request.completedAt,
+    ...(request.reflection ? { reflection: request.reflection } : {}),
+    idempotencyKey: request.idempotencyKey,
+  };
+  const timezone = state.athleteProfile?.timezone ?? "UTC";
+  const previous = calculateAthleteProgress(
+    state.completions ?? [],
+    athlete.id,
+    athlete.displayName,
+    timezone,
+    now(),
+  );
+  const completions = [...(state.completions ?? []), completion];
+  const next = calculateAthleteProgress(
+    completions,
+    athlete.id,
+    athlete.displayName,
+    timezone,
+    now(),
+  );
+  const response = {
+    ...buildCompletionSyncResponse(previous, next),
+    completionId: completion.id,
+  };
+  const idempotencyRecord: CompletionIdempotencyRecord = {
+    request,
+    response,
+    createdAt: isoNow(now),
+  };
+
+  return {
+    state: {
+      ...state,
+      sequence: allocation.sequence,
+      completions,
+      completionIdempotency: {
+        ...(state.completionIdempotency ?? {}),
+        [request.idempotencyKey]: idempotencyRecord,
+      },
+    },
+    response,
+  };
+}
+
+function dashboardForState(
+  state: LoadedSessionState,
+  athleteId: string,
+  now: Date,
+): CaregiverDashboardPayload {
+  const athlete = state.athleteAccount;
+  if (!athlete || athlete.id !== athleteId) {
+    throw new LocalApiError("Athlete not found.", 404);
+  }
+  const progress = calculateAthleteProgress(
+    state.completions ?? [],
+    athlete.id,
+    athlete.displayName,
+    state.athleteProfile?.timezone ?? "UTC",
+    now,
+  );
+  const completedDays = progress.weeklyCompletedDays;
+  const headline =
+    completedDays === 0
+      ? "Getting started"
+      : completedDays === 1
+        ? "Building composure"
+        : "Keeping a steady rhythm";
+  const description =
+    completedDays === 0
+      ? "The athlete is ready to complete the first beta session."
+      : completedDays === 1
+        ? "The athlete completed one mindset rep this week."
+        : `The athlete completed ${completedDays} mindset reps this week.`;
+  const lastRepTitle = progress.lastRep.completedAt
+    ? progress.lastRep.title
+    : "No completed reps";
+
+  return {
+    athlete: {
+      id: athlete.id,
+      name: athlete.displayName,
+      program: "Matchday Mindset · Week 1",
+      status: "active",
+    },
+    weeklySummary: {
+      headline,
+      description,
+      daysCompleted: completedDays,
+      daysTarget: 7,
+      sevenDayPattern: progress.sevenDayPattern,
+    },
+    metrics: {
+      moodTrend: {
+        status: progress.moodTrend.status,
+        subtitle: progress.moodTrend.subtitle,
+        trendData: progress.moodTrend.trendValues,
+      },
+      composureScore: {
+        value: progress.score,
+        changeWeekly: progress.deltaWeekly,
+      },
+      currentStreak: {
+        days: progress.currentStreakDays,
+        bestDays: progress.bestStreakDays,
+      },
+      lastRep: {
+        title: lastRepTitle,
+        duration: progress.lastRep.duration,
+        completedAt: progress.lastRep.completedAt,
+        completedToday: progress.lastRep.completedToday,
+      },
+    },
+    conversationStarters: [
+      {
+        id: completedDays ? "cs_progress" : "cs_start",
+        category: "TRY THIS TONIGHT",
+        prompt: completedDays
+          ? "What helped you stay steady during the week?"
+          : "What would help you feel ready before your next match?",
+        guidance: "Invite a story, not a score.",
+      },
+    ],
+    privacyPolicyNotice:
+      "Private by design. This view shares progress patterns, not session transcripts, reflections, audio, or playback controls.",
+  };
+}
+
 export function createLocalBetaApi(
   dependencies: LocalBetaApiDependencies = {},
 ): LocalBetaApi {
@@ -206,6 +488,7 @@ export function createLocalBetaApi(
   const clear = dependencies.clearSessionState ?? clearSessionState;
   const readCredential =
     dependencies.readLocalCredential ?? readLocalCredential;
+  const isOnline = dependencies.isOnline ?? hasInternetConnection;
   const now = dependencies.now ?? (() => new Date());
 
   async function readState() {
@@ -437,6 +720,9 @@ export function createLocalBetaApi(
       pairingCode: suppliedCode,
       pairingExpiresAt: state.pairingCode.expiresAt,
       consentStatus: "granted",
+      consentPolicyVersion: "beta-v1",
+      consentSource: "caregiver_claim",
+      consentActorId: caregiver.id,
       consentedAt: isoNow(now),
     };
     const athlete = updatePairingStatus(
@@ -536,11 +822,132 @@ export function createLocalBetaApi(
 
   async function getAthleteSession(): Promise<SessionRetrieveResponse> {
     const state = await readState();
-    const athlete = requireCurrentAccount(state, "athlete");
-    if (!canAthleteAccessSession(athlete, state.pairing)) {
-      throw new LocalApiError("Complete consent and pairing before opening a session.", 403);
-    }
+    requireAthleteAccess(state);
     return { session: sampleSessionPackage };
+  }
+
+  async function recordPlaybackEvent(
+    sessionId: string,
+    request: PlaybackEventRequest,
+  ): Promise<void> {
+    const state = await readState();
+    requireAthleteAccess(state);
+    if (sessionId !== sampleSessionPackage.id) {
+      throw new LocalApiError("This session is not available.", 404);
+    }
+    if (
+      request.mode !== "interactive" ||
+      !Number.isFinite(request.playbackPositionSeconds) ||
+      request.playbackPositionSeconds < 0
+    ) {
+      throw new LocalApiError("Playback event payload is invalid.", 422);
+    }
+    await savePlaybackProgress(sessionId, {
+      positionSeconds: request.playbackPositionSeconds,
+      playedIntervals: state.playbackProgress?.[sessionId]?.playedIntervals ?? [],
+      updatedAt: isoNow(now),
+    });
+  }
+
+  async function completeSession(
+    sessionId: string,
+    request: SessionCompletionRequest,
+  ): Promise<CompletionSyncResponse> {
+    const state = await readState();
+    const athlete = requireAthleteAccess(state);
+    validateCompletionRequest(state, sessionId, request);
+
+    const existing = state.completionIdempotency?.[request.idempotencyKey];
+    if (existing) {
+      return existing.response;
+    }
+
+    const applied = applyCompletion(state, athlete, request, now);
+    const online = await isOnline();
+    const timestamp = isoNow(now);
+    const queueItem = createOfflineCompletionQueueItem(request, now());
+    const queuedItem = online
+      ? {
+          ...queueItem,
+          attempts: 1,
+          lastAttemptAt: timestamp,
+          syncedAt: timestamp,
+          status: "synced" as const,
+        }
+      : queueItem;
+    const nextState = upsertOfflineCompletionQueueItem(applied.state, queuedItem);
+    await save(nextState);
+    return applied.response;
+  }
+
+  async function syncOfflineCompletions(): Promise<{ synced: number; failed: number }> {
+    if (!(await isOnline())) return { synced: 0, failed: 0 };
+
+    const initialState = await readState();
+    requireAthleteAccountForSync(initialState);
+    let state: PersistedSessionState = initialState;
+    let synced = 0;
+    let failed = 0;
+
+    for (const item of state.offlineCompletionQueue ?? []) {
+      if (item.status === "synced" || item.status === "syncing") continue;
+      const timestamp = isoNow(now);
+      state = updateOfflineCompletionQueueItem(state, item.request.idempotencyKey, {
+        status: "syncing",
+        attempts: item.attempts + 1,
+        lastAttemptAt: timestamp,
+        updatedAt: timestamp,
+      });
+      await save(state);
+
+      try {
+        const existing = state.completionIdempotency?.[item.request.idempotencyKey];
+        if (!existing) {
+          const athlete = requireAccount(initialState, "athlete");
+          validateCompletionRequest(initialState, item.request.sessionId, item.request);
+          const applied = applyCompletion(state, athlete, item.request, now);
+          state = applied.state;
+        }
+        state = updateOfflineCompletionQueueItem(state, item.request.idempotencyKey, {
+          status: "synced",
+          syncedAt: timestamp,
+          updatedAt: timestamp,
+          lastError: undefined,
+        });
+        await save(state);
+        synced += 1;
+      } catch (error) {
+        state = updateOfflineCompletionQueueItem(state, item.request.idempotencyKey, {
+          status: "failed",
+          updatedAt: timestamp,
+          lastError: error instanceof Error ? error.message : "Unable to sync completion.",
+        });
+        await save(state);
+        failed += 1;
+      }
+    }
+
+    return { synced, failed };
+  }
+
+  async function getAthleteProgress(): Promise<AthleteProgress> {
+    const state = await readState();
+    const athlete = requireCurrentAccount(state, "athlete");
+    if (!state.athleteProfile) {
+      throw new LocalApiError("Athlete profile is unavailable.", 404);
+    }
+    return calculateAthleteProgress(
+      state.completions ?? [],
+      athlete.id,
+      athlete.displayName,
+      state.athleteProfile.timezone,
+      now(),
+    );
+  }
+
+  async function getOfflineQueueStatus(): Promise<OfflineQueueStatus> {
+    const state = await readState();
+    return getQueueStatusFromState(state);
   }
 
   async function getCaregiverDashboard(
@@ -551,56 +958,42 @@ export function createLocalBetaApi(
     if (!canCaregiverAccessDashboard(caregiver, state.pairing)) {
       throw new LocalApiError("Caregiver access is not active.", 403);
     }
-    if (!state.athleteAccount || state.athleteAccount.id !== athleteId) {
-      throw new LocalApiError("Athlete not found.", 404);
-    }
+    return dashboardForState(state, athleteId, now());
+  }
 
+  async function revokeConsent(linkId: string): Promise<ConsentRevocationResponse> {
+    const state = await readState();
+    const athlete = requireCurrentAccount(state, "athlete");
+    const link = requirePairing(state);
+    if (link.id !== linkId || link.athleteId !== athlete.id) {
+      throw new LocalApiError("This athlete cannot revoke that relationship.", 403);
+    }
+    if (link.status !== "active") {
+      throw new LocalApiError("This relationship is not active.", 409);
+    }
+    const updatedLink = revokePairingLink(link, isoNow(now));
+    const updatedAthlete = updatePairingStatus(athlete, updatedLink.status);
+    const updatedCaregiver = updatePairingStatus(
+      state.caregiverAccount,
+      updatedLink.status,
+    );
+    await save({
+      ...state,
+      athleteAccount: updatedAthlete,
+      caregiverAccount: updatedCaregiver,
+      pairing: updatedLink,
+      currentRole: "athlete",
+    });
     return {
-      athlete: {
-        id: state.athleteAccount.id,
-        name: state.athleteAccount.displayName,
-        program: "Matchday Mindset · Week 1",
-        status: "active",
-      },
-      weeklySummary: {
-        headline: "Getting started",
-        description: "The athlete is ready to complete the first beta session.",
-        daysCompleted: 0,
-        daysTarget: 7,
-        sevenDayPattern: [false, false, false, false, false, false, false],
-      },
-      metrics: {
-        moodTrend: {
-          status: "Not enough data",
-          subtitle: "Complete a session to build a private baseline.",
-          trendData: [],
-        },
-        composureScore: {
-          value: 0,
-          changeWeekly: 0,
-        },
-        currentStreak: {
-          days: 0,
-          bestDays: 0,
-        },
-        lastRep: {
-          title: "Nerves = Performance",
-          duration: "5 min",
-          completedAt: "",
-          completedToday: false,
-        },
-      },
-      conversationStarters: [
-        {
-          id: "cs_start",
-          category: "TRY THIS TONIGHT",
-          prompt: "What would help you feel ready before your next match?",
-          guidance: "Invite a story, not a score.",
-        },
-      ],
-      privacyPolicyNotice:
-        "Private by design. This view shares progress patterns, not session transcripts, reflections, audio, or playback controls.",
+      linkId: updatedLink.id,
+      status: "revoked",
+      revokedAt: updatedLink.revokedAt,
     };
+  }
+
+  async function deleteAccount(_request: DataDeletionRequest): Promise<void> {
+    // Token and credential clearing is handled by the caller via clearSessionState.
+    // This is a hook for future server-driven cleanup logic.
   }
 
   async function resetLocalBetaState() {
@@ -617,7 +1010,14 @@ export function createLocalBetaApi(
     approvePairing,
     revokePairing,
     getAthleteSession,
+    recordPlaybackEvent,
+    completeSession,
+    syncOfflineCompletions,
+    getAthleteProgress,
+    getOfflineQueueStatus,
     getCaregiverDashboard,
+    revokeConsent,
+    deleteAccount,
     resetLocalBetaState,
   };
 }
@@ -633,5 +1033,12 @@ export const claimPairingCode = localBetaApi.claimPairingCode;
 export const approvePairing = localBetaApi.approvePairing;
 export const revokePairing = localBetaApi.revokePairing;
 export const getAthleteSession = localBetaApi.getAthleteSession;
+export const recordPlaybackEvent = localBetaApi.recordPlaybackEvent;
+export const completeSession = localBetaApi.completeSession;
+export const syncOfflineCompletions = localBetaApi.syncOfflineCompletions;
+export const getAthleteProgress = localBetaApi.getAthleteProgress;
+export const getOfflineQueueStatus = localBetaApi.getOfflineQueueStatus;
 export const getCaregiverDashboard = localBetaApi.getCaregiverDashboard;
+export const revokeConsent = localBetaApi.revokeConsent;
+export const deleteAccount = localBetaApi.deleteAccount;
 export const resetLocalBetaState = localBetaApi.resetLocalBetaState;

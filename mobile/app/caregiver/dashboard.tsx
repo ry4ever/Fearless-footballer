@@ -2,9 +2,10 @@ import { useEffect, useState } from "react";
 import { View } from "react-native";
 import { useRouter } from "expo-router";
 import type { CaregiverDashboardPayload } from "../../../shared/types";
-import { getCaregiverDashboard, LocalApiError } from "../../src/lib/localBetaApi";
+import { getApiFacade, LocalApiError } from "../../src/lib/apiFacade";
 import { CaregiverRouteGuard, useSession } from "../../src/session";
 import { canAthleteAccessSession } from "../../src/lib/sessionGuard";
+import { addConnectivityListener } from "../../src/lib/offlineCompletionQueue";
 import {
   Brand,
   Button,
@@ -17,6 +18,7 @@ import {
 function CaregiverDashboardContent() {
   const router = useRouter();
   const { state, signOut, switchRole } = useSession();
+  const api = getApiFacade({ role: state?.currentRole ?? "caregiver" });
   const [dashboard, setDashboard] = useState<CaregiverDashboardPayload | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -27,7 +29,7 @@ function CaregiverDashboardContent() {
     let mounted = true;
     setLoading(true);
     setError(null);
-    getCaregiverDashboard(athleteId)
+    api.getCaregiverDashboard(athleteId)
       .then((result) => {
         if (mounted) setDashboard(result);
       })
@@ -47,6 +49,16 @@ function CaregiverDashboardContent() {
       mounted = false;
     };
   }, [athleteId, state?.pairing?.id]);
+
+  useEffect(() => {
+    if (!state?.currentUser?.id) return undefined;
+
+    const unsubscribe = addConnectivityListener(() => {
+      api.syncOfflineCompletions().catch(() => null);
+    });
+
+    return unsubscribe;
+  }, [state?.currentUser?.id]);
 
   return (
     <Screen testID="caregiver-dashboard-screen">
@@ -73,21 +85,27 @@ function CaregiverDashboardContent() {
           <StatusCard tone="info" title="Weekly rhythm">
             {dashboard.weeklySummary.headline} · {dashboard.weeklySummary.daysCompleted}/{dashboard.weeklySummary.daysTarget} days
           </StatusCard>
-          <StatusCard tone="info" title="Composure index">
+          <StatusCard tone="info" title="Training score">
             {dashboard.metrics.composureScore.value} · {dashboard.metrics.composureScore.changeWeekly >= 0 ? "+" : ""}{dashboard.metrics.composureScore.changeWeekly} this week
           </StatusCard>
           <StatusCard tone="info" title="Current streak">
             {dashboard.metrics.currentStreak.days} days · Best {dashboard.metrics.currentStreak.bestDays} days
           </StatusCard>
-          <StatusCard tone="info" title="Last rep">
+          <StatusCard tone="info" title="Last session">
             {dashboard.metrics.lastRep.title} · {dashboard.metrics.lastRep.duration}
           </StatusCard>
           <StatusCard tone="info" title="Conversation starter">
-            {dashboard.conversationStarters[0]?.prompt ?? "Invite a story, not a score."}
+            {dashboard.conversationStarters[0]?.prompt ?? "Which situation did you rehearse today?"}
           </StatusCard>
           <PrivacyNotice />
         </View>
       ) : null}
+      <Button
+        label="Privacy and account"
+        variant="secondary"
+        onPress={() => router.push("/caregiver/settings")}
+        accessibilityLabel="Open caregiver privacy and account settings"
+      />
       <Button
         label="Switch to athlete account"
         variant="secondary"

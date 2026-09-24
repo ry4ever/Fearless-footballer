@@ -3,15 +3,20 @@ import * as SecureStore from "expo-secure-store";
 import type {
   AuthTokenSet,
   BetaUserRole,
+  CompletionSyncResponse,
+  OfflineCompletionQueueItem,
   PairingCode,
   PairingLink,
+  SessionCompletion,
+  SessionCompletionRequest,
   UserAccount,
 } from "../../../shared/types";
+import { calculateAthleteProgress } from "./metrics";
+import type { PlaybackInterval } from "./sessionPlayer";
 
 const STATE_KEY = "fearlessfootballer.session.v1";
 const TOKEN_PREFIX = "fearlessfootballer.token.";
 const CREDENTIAL_PREFIX = "fearlessfootballer.credential.";
-
 
 export interface LocalCredential {
   email: string;
@@ -28,6 +33,18 @@ export interface CaregiverLocalProfile {
   privacyAcknowledgedAt?: string;
 }
 
+export interface SessionPlaybackProgress {
+  positionSeconds: number;
+  playedIntervals: PlaybackInterval[];
+  updatedAt: string;
+}
+
+export interface CompletionIdempotencyRecord {
+  request: SessionCompletionRequest;
+  response: CompletionSyncResponse;
+  createdAt: string;
+}
+
 export interface PersistedSessionState {
   athleteAccount?: UserAccount;
   caregiverAccount?: UserAccount;
@@ -38,23 +55,33 @@ export interface PersistedSessionState {
   sequence?: number;
   athleteProfile?: AthleteLocalProfile;
   caregiverProfile?: CaregiverLocalProfile;
+  completions?: SessionCompletion[];
+  completionIdempotency?: Record<string, CompletionIdempotencyRecord>;
+  pendingCompletionKeys?: Record<string, string>;
+  playbackProgress?: Record<string, SessionPlaybackProgress>;
+  offlineCompletionQueue?: OfflineCompletionQueueItem[];
 }
 
 export interface LoadedSessionState extends PersistedSessionState {
   currentUser?: UserAccount;
   hasTokens: boolean;
+  athleteProgress?: ReturnType<typeof calculateAthleteProgress>;
 }
 
-function tokenKey(role: BetaUserRole, kind: "access" | "refresh") {
+export function tokenKey(role: BetaUserRole, kind: "access" | "refresh") {
   return `${TOKEN_PREFIX}${role}.${kind}`;
 }
 
-function credentialKey(role: BetaUserRole) {
+export function credentialKey(role: BetaUserRole) {
   return `${CREDENTIAL_PREFIX}${role}`;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+}
+
+function isFiniteNumber(value: unknown): value is number {
+  return typeof value === "number" && Number.isFinite(value);
 }
 
 function isRole(value: unknown): value is BetaUserRole {
@@ -88,6 +115,12 @@ function isConsentStatus(value: unknown): value is "pending" | "granted" | "revo
 
 function isRelationship(value: unknown): value is "parent" | "guardian" {
   return value === "parent" || value === "guardian";
+}
+
+function isReflectionFeeling(
+  value: unknown,
+): value is "clearer" | "steadier" | "more_ready" {
+  return value === "clearer" || value === "steadier" || value === "more_ready";
 }
 
 function parseUserAccount(value: unknown): UserAccount | undefined {
@@ -133,6 +166,11 @@ function parsePairingLink(value: unknown): PairingLink | undefined {
     !isRelationship(value.relationship) ||
     !isPairingStatus(value.status) ||
     !isConsentStatus(value.consentStatus) ||
+    (value.consentPolicyVersion !== undefined &&
+      typeof value.consentPolicyVersion !== "string") ||
+    (value.consentSource !== undefined && typeof value.consentSource !== "string") ||
+    (value.consentActorId !== undefined && typeof value.consentActorId !== "string") ||
+    (value.consentRevokedAt !== undefined && typeof value.consentRevokedAt !== "string") ||
     (value.pairingCode !== undefined && typeof value.pairingCode !== "string") ||
     (value.pairingExpiresAt !== undefined && typeof value.pairingExpiresAt !== "string") ||
     (value.consentedAt !== undefined && typeof value.consentedAt !== "string") ||
@@ -153,7 +191,19 @@ function parsePairingLink(value: unknown): PairingLink | undefined {
       ? { pairingExpiresAt: value.pairingExpiresAt }
       : {}),
     consentStatus: value.consentStatus,
+    ...(typeof value.consentPolicyVersion === "string"
+      ? { consentPolicyVersion: value.consentPolicyVersion }
+      : {}),
+    ...(typeof value.consentSource === "string"
+      ? { consentSource: value.consentSource }
+      : {}),
+    ...(typeof value.consentActorId === "string"
+      ? { consentActorId: value.consentActorId }
+      : {}),
     ...(typeof value.consentedAt === "string" ? { consentedAt: value.consentedAt } : {}),
+    ...(typeof value.consentRevokedAt === "string"
+      ? { consentRevokedAt: value.consentRevokedAt }
+      : {}),
     ...(typeof value.athleteApprovedAt === "string"
       ? { athleteApprovedAt: value.athleteApprovedAt }
       : {}),
@@ -181,6 +231,164 @@ function parseCaregiverProfile(value: unknown): CaregiverLocalProfile | undefine
   };
 }
 
+function parsePlaybackInterval(value: unknown): PlaybackInterval | undefined {
+  if (
+    !isRecord(value) ||
+    !isFiniteNumber(value.startSeconds) ||
+    !isFiniteNumber(value.endSeconds) ||
+    value.endSeconds <= value.startSeconds
+  ) {
+    return undefined;
+  }
+  return { startSeconds: value.startSeconds, endSeconds: value.endSeconds };
+}
+
+function parsePlaybackProgress(value: unknown): SessionPlaybackProgress | undefined {
+  if (
+    !isRecord(value) ||
+    !isFiniteNumber(value.positionSeconds) ||
+    value.positionSeconds < 0 ||
+    typeof value.updatedAt !== "string" ||
+    !Array.isArray(value.playedIntervals)
+  ) {
+    return undefined;
+  }
+  const playedIntervals = value.playedIntervals
+    .map(parsePlaybackInterval)
+    .filter((interval): interval is PlaybackInterval => Boolean(interval));
+  return {
+    positionSeconds: value.positionSeconds,
+    playedIntervals,
+    updatedAt: value.updatedAt,
+  };
+}
+
+function parseReflection(value: unknown) {
+  if (!isRecord(value) || !isReflectionFeeling(value.feeling)) return undefined;
+  return {
+    feeling: value.feeling,
+    ...(typeof value.note === "string" && value.note.trim()
+      ? { note: value.note.trim() }
+      : {}),
+  };
+}
+
+function parseCompletion(value: unknown): SessionCompletion | undefined {
+  if (
+    !isRecord(value) ||
+    typeof value.id !== "string" ||
+    typeof value.sessionId !== "string" ||
+    typeof value.sessionVersion !== "string" ||
+    value.mode !== "interactive" ||
+    !isFiniteNumber(value.durationSeconds) ||
+    value.durationSeconds < 0 ||
+    typeof value.completedAt !== "string" ||
+    (value.reflection !== undefined && !parseReflection(value.reflection)) ||
+    (value.idempotencyKey !== undefined && typeof value.idempotencyKey !== "string")
+  ) {
+    return undefined;
+  }
+  const reflection = parseReflection(value.reflection);
+  return {
+    id: value.id,
+    sessionId: value.sessionId,
+    sessionVersion: value.sessionVersion,
+    mode: "interactive",
+    durationSeconds: value.durationSeconds,
+    completedAt: value.completedAt,
+    ...(reflection ? { reflection } : {}),
+    ...(typeof value.idempotencyKey === "string"
+      ? { idempotencyKey: value.idempotencyKey }
+      : {}),
+  };
+}
+
+function parseIdempotencyRecord(
+  value: unknown,
+): CompletionIdempotencyRecord | undefined {
+  if (
+    !isRecord(value) ||
+    !isRecord(value.request) ||
+    !isRecord(value.response) ||
+    typeof value.createdAt !== "string"
+  ) {
+    return undefined;
+  }
+  const request = value.request;
+  const response = value.response;
+  const reflection = parseReflection(request.reflection);
+  if (
+    typeof request.sessionId !== "string" ||
+    typeof request.sessionVersion !== "string" ||
+    request.mode !== "interactive" ||
+    !isFiniteNumber(request.completionDurationSeconds) ||
+    typeof request.completedAt !== "string" ||
+    typeof request.idempotencyKey !== "string" ||
+    (request.reflection !== undefined && !reflection) ||
+    typeof response.completionId !== "string" ||
+    !isRecord(response.streak) ||
+    !isRecord(response.composure) ||
+    !isRecord(response.weeklyProgress)
+  ) {
+    return undefined;
+  }
+  return {
+    request: {
+      sessionId: request.sessionId,
+      sessionVersion: request.sessionVersion,
+      mode: "interactive",
+      completionDurationSeconds: request.completionDurationSeconds,
+      completedAt: request.completedAt,
+      ...(reflection ? { reflection } : {}),
+      idempotencyKey: request.idempotencyKey,
+    },
+    response: response as unknown as CompletionSyncResponse,
+    createdAt: value.createdAt,
+  };
+}
+
+function parseQueueItem(value: unknown): OfflineCompletionQueueItem | undefined {
+  if (
+    !isRecord(value) ||
+    typeof value.id !== "string" ||
+    !isRecord(value.request) ||
+    typeof value.createdAt !== "string" ||
+    typeof value.updatedAt !== "string" ||
+    !isFiniteNumber(value.attempts) ||
+    typeof value.status !== "string"
+  ) {
+    return undefined;
+  }
+  const status = value.status;
+  if (
+    status !== "queued" &&
+    status !== "syncing" &&
+    status !== "synced" &&
+    status !== "failed"
+  ) {
+    return undefined;
+  }
+  return {
+    id: value.id,
+    request: value.request as unknown as SessionCompletionRequest,
+    createdAt: value.createdAt,
+    updatedAt: value.updatedAt,
+    attempts: value.attempts,
+    status,
+    ...(typeof value.lastError === "string" ? { lastError: value.lastError } : {}),
+  };
+}
+
+function parseRecordOfStrings(value: unknown): Record<string, string> | undefined {
+  if (!isRecord(value)) return undefined;
+  const result: Record<string, string> = {};
+  for (const [key, entry] of Object.entries(value)) {
+    if (typeof entry !== "string") return undefined;
+    result[key] = entry;
+  }
+  return result;
+}
+
 function parsePersistedState(raw: string | null): PersistedSessionState {
   if (!raw) return {};
 
@@ -200,6 +408,40 @@ function parsePersistedState(raw: string | null): PersistedSessionState {
       parsed.sequence >= 0
         ? parsed.sequence
         : undefined;
+    const completions = Array.isArray(parsed.completions)
+      ? parsed.completions
+          .map(parseCompletion)
+          .filter((completion): completion is SessionCompletion => Boolean(completion))
+      : undefined;
+    const playbackProgress = isRecord(parsed.playbackProgress)
+      ? Object.fromEntries(
+          Object.entries(parsed.playbackProgress)
+            .map(([sessionId, progress]) => [
+              sessionId,
+              parsePlaybackProgress(progress),
+            ] as const)
+            .filter(
+              (entry): entry is readonly [string, SessionPlaybackProgress] =>
+                Boolean(entry[1]),
+            ),
+        )
+      : undefined;
+    const completionIdempotency = isRecord(parsed.completionIdempotency)
+      ? Object.fromEntries(
+          Object.entries(parsed.completionIdempotency)
+            .map(([key, entry]) => [key, parseIdempotencyRecord(entry)] as const)
+            .filter(
+              (entry): entry is readonly [string, CompletionIdempotencyRecord] =>
+                Boolean(entry[1]),
+            ),
+        )
+      : undefined;
+    const pendingCompletionKeys = parseRecordOfStrings(parsed.pendingCompletionKeys);
+    const offlineCompletionQueue = Array.isArray(parsed.offlineCompletionQueue)
+      ? parsed.offlineCompletionQueue
+          .map(parseQueueItem)
+          .filter((item): item is OfflineCompletionQueueItem => Boolean(item))
+      : undefined;
 
     return {
       ...(athleteAccount ? { athleteAccount } : {}),
@@ -213,6 +455,17 @@ function parsePersistedState(raw: string | null): PersistedSessionState {
       ...(sequence !== undefined ? { sequence } : {}),
       ...(athleteProfile ? { athleteProfile } : {}),
       ...(caregiverProfile ? { caregiverProfile } : {}),
+      ...(completions?.length ? { completions } : {}),
+      ...(completionIdempotency && Object.keys(completionIdempotency).length
+        ? { completionIdempotency }
+        : {}),
+      ...(pendingCompletionKeys && Object.keys(pendingCompletionKeys).length
+        ? { pendingCompletionKeys }
+        : {}),
+      ...(playbackProgress && Object.keys(playbackProgress).length
+        ? { playbackProgress }
+        : {}),
+      ...(offlineCompletionQueue?.length ? { offlineCompletionQueue } : {}),
     };
   } catch {
     return {};
@@ -250,6 +503,15 @@ export async function loadSessionState(): Promise<LoadedSessionState> {
       : state.currentRole === "caregiver"
         ? state.caregiverAccount
         : undefined;
+  const athleteProgress =
+    state.athleteAccount && state.athleteProfile
+      ? calculateAthleteProgress(
+          state.completions ?? [],
+          state.athleteAccount.id,
+          state.athleteAccount.displayName,
+          state.athleteProfile.timezone,
+        )
+      : undefined;
 
   return {
     ...state,
@@ -258,6 +520,7 @@ export async function loadSessionState(): Promise<LoadedSessionState> {
       state.currentRole &&
         (state.currentRole === "athlete" ? athleteTokens : caregiverTokens),
     ),
+    ...(athleteProgress ? { athleteProgress } : {}),
   };
 }
 
@@ -322,6 +585,50 @@ export async function readLocalCredential(
   }
 }
 
+export async function savePlaybackProgress(
+  sessionId: string,
+  progress: SessionPlaybackProgress,
+) {
+  const state = await loadSessionState();
+  await saveSessionState({
+    ...state,
+    playbackProgress: {
+      ...(state.playbackProgress ?? {}),
+      [sessionId]: progress,
+    },
+  });
+}
+
+export async function loadPlaybackProgress(
+  sessionId: string,
+): Promise<SessionPlaybackProgress | null> {
+  const state = await loadSessionState();
+  return state.playbackProgress?.[sessionId] ?? null;
+}
+
+export async function getOrCreatePendingCompletionKey(sessionId: string) {
+  const state = await loadSessionState();
+  const existing = state.pendingCompletionKeys?.[sessionId];
+  if (existing) return existing;
+  const key = `cmp_${Date.now().toString(36)}_${sessionId}`;
+  await saveSessionState({
+    ...state,
+    pendingCompletionKeys: {
+      ...(state.pendingCompletionKeys ?? {}),
+      [sessionId]: key,
+    },
+  });
+  return key;
+}
+
+export async function clearPendingCompletionKey(sessionId: string) {
+  const state = await loadSessionState();
+  if (!state.pendingCompletionKeys?.[sessionId]) return;
+  const pendingCompletionKeys = { ...state.pendingCompletionKeys };
+  delete pendingCompletionKeys[sessionId];
+  await saveSessionState({ ...state, pendingCompletionKeys });
+}
+
 export async function clearSessionState() {
   await AsyncStorage.removeItem(STATE_KEY);
   await Promise.all([
@@ -362,3 +669,5 @@ export function withCurrentRole(
     hasTokens: false,
   };
 }
+
+export type { PlaybackInterval };

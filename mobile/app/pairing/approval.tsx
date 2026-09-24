@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Redirect, useRouter } from "expo-router";
-import { approvePairing, revokePairing } from "../../src/lib/localBetaApi";
+import { getApiFacade, LocalApiError } from "../../src/lib/apiFacade";
 import { AthleteAccountGuard, useSession } from "../../src/session";
 import {
   Brand,
@@ -14,6 +14,7 @@ import {
 function PairingApprovalContent() {
   const router = useRouter();
   const { state, refresh } = useSession();
+  const api = getApiFacade({ role: "athlete" });
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const pairing = state?.pairing;
@@ -23,7 +24,7 @@ function PairingApprovalContent() {
     setError("");
     setLoading(true);
     try {
-      await approvePairing(pairing.id, { approved });
+      await api.approvePairing(pairing.id, { approved });
       await refresh();
       router.replace(approved ? "/athlete/home" : "/athlete/restricted");
     } catch (caught) {
@@ -38,7 +39,7 @@ function PairingApprovalContent() {
     setError("");
     setLoading(true);
     try {
-      await revokePairing(pairing.id);
+      await api.revokePairing(pairing.id);
       await refresh();
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Unable to revoke caregiver access.");

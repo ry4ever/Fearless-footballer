@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Pressable, Text, View } from "react-native";
 import { useRouter } from "expo-router";
-import { claimPairingCode } from "../../src/lib/localBetaApi";
+import { getApiFacade } from "../../src/lib/apiFacade";
 import type { PairingRelationship } from "../../../shared/types";
 import { CaregiverAccountGuard, useSession } from "../../src/session";
 import {
@@ -19,6 +19,7 @@ import {
 export function PairingClaimContent() {
   const router = useRouter();
   const { state, refresh, switchRole } = useSession();
+  const api = getApiFacade({ role: "caregiver" });
   const [pairingCode, setPairingCode] = useState("");
   const [relationship, setRelationship] = useState<PairingRelationship | null>(null);
   const [consentConfirmed, setConsentConfirmed] = useState(false);
@@ -35,7 +36,7 @@ export function PairingClaimContent() {
 
     setLoading(true);
     try {
-      const result = await claimPairingCode({
+      const result = await api.claimPairingCode({
         pairingCode: pairingCode.trim().toUpperCase(),
         relationship,
         consentConfirmed,

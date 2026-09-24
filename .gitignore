@@ -111,3 +111,17 @@ temp/
 # Manus version file (auto-generated, not part of source)
 client/public/__manus__/version.json
 .project-config.json
+
+# Local agent & review artifacts
+.antigravity/
+.claude/
+*.zip
+*.mov
+*.mp3
+*.docx
+review-*.png
+review-shots/
+mobile/*.png
+project_details/Sessions/
+project_details/Recipe_s/
+project_details/Images/

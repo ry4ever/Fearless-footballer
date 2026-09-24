@@ -1,11 +1,7 @@
 import { useState } from "react";
 import { Pressable, Text, View } from "react-native";
 import { useRouter } from "expo-router";
-import {
-  LocalApiError,
-  registerAccount,
-  signInAccount,
-} from "../../src/lib/localBetaApi";
+import { getApiFacade, LocalApiError } from "../../src/lib/apiFacade";
 import { useSession } from "../../src/session";
 import {
   Brand,
@@ -22,6 +18,7 @@ type Mode = "register" | "signin";
 export default function AthleteRegisterScreen() {
   const router = useRouter();
   const { refresh } = useSession();
+  const api = getApiFacade({ role: "athlete" });
   const [displayName, setDisplayName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -48,7 +45,7 @@ export default function AthleteRegisterScreen() {
     setLoading(true);
     try {
       if (mode === "register") {
-        await registerAccount({
+        await api.registerAccount({
           role: "athlete",
           displayName,
           email,
@@ -59,7 +56,7 @@ export default function AthleteRegisterScreen() {
           privacyAcknowledged: true,
         });
       } else {
-        await signInAccount({
+        await api.signInAccount({
           role: "athlete",
           email,
           password,

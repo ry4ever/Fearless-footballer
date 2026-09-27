@@ -1,6 +1,7 @@
 FROM node:20-alpine AS builder
 
 WORKDIR /app
+RUN apk add --no-cache python3 make g++
 COPY package.json pnpm-lock.yaml ./
 COPY patches ./patches
 RUN corepack enable && pnpm install --frozen-lockfile

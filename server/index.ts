@@ -48,10 +48,10 @@ function requiredRuntimeSecret(name: string, testValue: string): string {
   const value = process.env[name];
   if (value) return value;
   if (process.env.NODE_ENV === "test") return testValue;
-  throw new Error(`${name} is required outside test environments`);
+  throw new Error(`${name} is required outside test environments. Check your deployment environment variables.`);
 }
 
-const JWT_ACCESS_SECRET = requiredRuntimeSecret("JWT_ACCESS_SECRET", TEST_ACCESS_SECRET);
+const JWT_ACCESS_SECRET = process.env.JWT_ACCESS_SECRET || process.env.JWT_SECRET || (process.env.NODE_ENV === "test" ? TEST_ACCESS_SECRET : requiredRuntimeSecret("JWT_ACCESS_SECRET", TEST_ACCESS_SECRET));
 const JWT_REFRESH_SECRET = requiredRuntimeSecret("JWT_REFRESH_SECRET", TEST_REFRESH_SECRET);
 const ACCESS_TOKEN_TTL = process.env.ACCESS_TOKEN_TTL ?? "15m";
 const REFRESH_TOKEN_TTL = process.env.REFRESH_TOKEN_TTL ?? "30d";
@@ -1925,9 +1925,9 @@ app.use((error: Error & { status?: number }, req: Request, res: Response, _next:
 
 export { app, server };
 
-const port = process.env.PORT ?? 3000;
+const port = Number(process.env.PORT ?? 3000);
 const server = process.env.NODE_ENV !== "test"
-  ? app.listen(port, () => {
-      console.log(`Fearless Footballer API running on http://localhost:${port}`);
+  ? app.listen(port, "0.0.0.0", () => {
+      console.log(`Fearless Footballer API running on port ${port} (0.0.0.0)`);
     })
   : undefined;

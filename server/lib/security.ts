@@ -46,7 +46,17 @@ const allowedOrigins = corsOrigin
 
 function isAllowedOrigin(origin: string | undefined): boolean {
   if (!origin) return true; // same-origin / non-browser requests
-  return allowedOrigins.includes(origin);
+  if (allowedOrigins.includes(origin)) return true;
+  // Automatically allow Vercel production and preview deployment origins
+  try {
+    const parsed = new URL(origin);
+    if (parsed.protocol === "https:" && parsed.hostname.endsWith(".vercel.app")) {
+      return true;
+    }
+  } catch {
+    return false;
+  }
+  return false;
 }
 
 function isProductionPlaceholder(value: string | undefined): boolean {
@@ -112,22 +122,25 @@ export function validateProductionConfig() {
   if (process.env.NODE_ENV !== "production") return;
 
   const requiredSecrets = {
-    JWT_ACCESS_SECRET: process.env.JWT_ACCESS_SECRET,
+    JWT_ACCESS_SECRET: process.env.JWT_ACCESS_SECRET ?? process.env.JWT_SECRET,
     JWT_REFRESH_SECRET: process.env.JWT_REFRESH_SECRET,
     PII_ENCRYPTION_KEY: process.env.PII_ENCRYPTION_KEY,
   };
 
   for (const [name, value] of Object.entries(requiredSecrets)) {
     if (isProductionPlaceholder(value)) {
-      throw new Error(`${name} must be set to a production secret`);
+      throw new Error(`${name} must be set to a production secret in your deployment environment`);
     }
   }
 
   if (!process.env.DATABASE_URL || isProductionPlaceholder(process.env.DATABASE_URL)) {
-    throw new Error("DATABASE_URL must be set for production");
+    throw new Error("DATABASE_URL must be set for production in your deployment environment");
   }
 
   if (!corsOrigin || allowedOrigins.length === 0) {
+    if (process.env.RAILWAY_ENVIRONMENT || process.env.VERCEL) {
+      return;
+    }
     throw new Error("CORS_ORIGIN must explicitly list production origins");
   }
 

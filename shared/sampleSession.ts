@@ -29,19 +29,19 @@ export const sampleSessionPackage: SessionPackage = {
   phases: [
     {
       number: 1,
-      label: "Center",
+      label: "SEE",
       startSeconds: 0,
       endSeconds: 90,
     },
     {
       number: 2,
-      label: "Reframe",
+      label: "REHEARSE",
       startSeconds: 90,
       endSeconds: 210,
     },
     {
       number: 3,
-      label: "Rehearse",
+      label: "BECOME",
       startSeconds: 210,
       endSeconds: 300,
     },

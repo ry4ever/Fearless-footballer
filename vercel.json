@@ -6,7 +6,7 @@
   "rewrites": [
     {
       "source": "/(auth|sessions|caregiver|athlete|health|admin|feedback)(.*)",
-      "destination": "https://${process.env.RAILWAY_BACKEND_URL}/$1$2"
+      "destination": "https://fearless-footballer-production.up.railway.app/$1$2"
     },
     {
       "source": "/(.*)",

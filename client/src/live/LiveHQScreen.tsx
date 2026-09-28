@@ -3,50 +3,47 @@ import { ChevronRight, Flame } from "lucide-react";
 import type { AthleteProgress, SessionLibraryResponse, SessionPackage } from "@shared/types";
 import { FearlessHeaderLogo } from "../components/icons/CustomIcons";
 import { apiClient } from "../lib/apiClient";
-import { formatMinutes } from "./LiveSessionDetail";
 import { offlineQueue } from "../lib/offlineQueue";
 import { loadPlan } from "./plan";
 import { useSession } from "./session";
 
 interface LiveHQScreenProps {
-  onOpenSession: (session: SessionPackage) => void;
+  onStartSession: (session: SessionPackage) => void;
 }
 
-/** Shortest-to-longest length across the session's versions, e.g. "8–10 min". */
-function lengthLabel(session: SessionPackage) {
-  const lengths = (session.audio ?? []).map((variant) => variant.durationSeconds);
-  if (lengths.length === 0) return formatMinutes(session.defaultDurationSeconds);
-  const min = Math.round(Math.min(...lengths) / 60);
-  const max = Math.round(Math.max(...lengths) / 60);
-  return min === max ? `${min} min` : `${min}–${max} min`;
-}
-
+/** A playable session opens straight into the player; coming-soon ones are listed only. */
 function SessionRow({
   session,
   index,
-  onOpen,
+  onStart,
 }: {
   session: SessionPackage;
   index?: number;
-  onOpen: (session: SessionPackage) => void;
+  onStart: (session: SessionPackage) => void;
 }) {
-  return (
-    <button type="button" className={`live-session-row ${session.comingSoon ? "soon" : ""}`} onClick={() => onOpen(session)}>
+  const content = (
+    <>
       {index !== undefined && <span className="row-index">{index}</span>}
       <span className="row-text">
         <strong>{session.title}</strong>
-        <small>
-          {session.comingSoon
-            ? session.focusArea ?? ""
-            : [lengthLabel(session), session.focusArea].filter(Boolean).join(" · ")}
-        </small>
+        {session.focusArea && <small>{session.focusArea}</small>}
       </span>
       {session.comingSoon ? <span className="row-badge">SOON</span> : <ChevronRight size={18} color="#69e0fa" />}
+    </>
+  );
+  if (session.comingSoon) {
+    return (
+      <div className="live-session-row soon" aria-label={`${session.title}, coming soon`}>
+        {content}
+      </div>
+    );
+  }
+  return (
+    <button type="button" className="live-session-row" onClick={() => onStart(session)}>
+      {content}
     </button>
   );
 }
-
-const GAUGE_CIRCUMFERENCE = 264;
 
 function greeting(now = new Date()) {
   const hour = now.getHours();
@@ -55,7 +52,7 @@ function greeting(now = new Date()) {
   return "GOOD EVENING";
 }
 
-export function LiveHQScreen({ onOpenSession }: LiveHQScreenProps) {
+export function LiveHQScreen({ onStartSession }: LiveHQScreenProps) {
   const { user } = useSession();
   const [progress, setProgress] = useState<AthleteProgress | null>(null);
   const [library, setLibrary] = useState<SessionLibraryResponse | null>(null);
@@ -116,7 +113,6 @@ export function LiveHQScreen({ onOpenSession }: LiveHQScreenProps) {
     );
   }
 
-  const score = Math.max(0, Math.min(100, progress.score));
   const byId = new Map(library.sessions.map((session) => [session.id, session]));
   const programmes = library.programmes.filter((programme) => programme.sessionIds.some((id) => byId.has(id)));
   const playable = library.sessions.filter((session) => !session.comingSoon);
@@ -155,30 +151,7 @@ export function LiveHQScreen({ onOpenSession }: LiveHQScreenProps) {
         </p>
       )}
 
-      <section className="metrics-grid" aria-label="Your training numbers">
-        <div className="metric-card composure-gauge-card">
-          <div className="circular-gauge-wrap">
-            <svg className="gauge-svg" viewBox="0 0 100 100" aria-hidden="true">
-              <circle className="gauge-track" cx="50" cy="50" r="42" />
-              <circle
-                className="gauge-value"
-                cx="50"
-                cy="50"
-                r="42"
-                strokeDasharray={GAUGE_CIRCUMFERENCE}
-                strokeDashoffset={GAUGE_CIRCUMFERENCE * (1 - score / 100)}
-              />
-            </svg>
-            <div className="gauge-inner">
-              <span className="gauge-label">COMPOSURE</span>
-              <strong className="gauge-number">{score}</strong>
-              <span style={{ fontSize: "0.65rem", color: "#00F0FF", fontWeight: 700 }}>
-                {progress.deltaWeekly > 0 ? `+${progress.deltaWeekly} this week` : "Score"}
-              </span>
-            </div>
-          </div>
-        </div>
-
+      <section aria-label="Your streak">
         <div className="metric-card streak-active-card">
           <div className="streak-header-row">
             <div className="flame-glow-icon">
@@ -210,7 +183,7 @@ export function LiveHQScreen({ onOpenSession }: LiveHQScreenProps) {
               </p>
               {programme.sessionIds.map((id, index) => {
                 const session = byId.get(id);
-                return session ? <SessionRow key={id} session={session} index={index + 1} onOpen={onOpenSession} /> : null;
+                return session ? <SessionRow key={id} session={session} index={index + 1} onStart={onStartSession} /> : null;
               })}
             </div>
           ))}
@@ -232,7 +205,7 @@ export function LiveHQScreen({ onOpenSession }: LiveHQScreenProps) {
                 {group}
               </p>
               {sessions.map((session) => (
-                <SessionRow key={session.id} session={session} onOpen={onOpenSession} />
+                <SessionRow key={session.id} session={session} onStart={onStartSession} />
               ))}
             </div>
           ))}
@@ -261,7 +234,7 @@ export function LiveHQScreen({ onOpenSession }: LiveHQScreenProps) {
           <span className="eyebrow">COMING SOON</span>
           <div style={{ marginTop: 8 }}>
             {comingSoon.map((session) => (
-              <SessionRow key={session.id} session={session} onOpen={onOpenSession} />
+              <SessionRow key={session.id} session={session} onStart={onStartSession} />
             ))}
           </div>
         </section>

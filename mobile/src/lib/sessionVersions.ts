@@ -60,19 +60,6 @@ export function progressKey(sessionId: string, variant: SessionAudioVariant | nu
   return variant ? `${sessionId}:${variant.mode}:${variant.withMusic ? "music" : "no-music"}` : sessionId;
 }
 
-export function formatMinutes(seconds: number): string {
-  return `${Math.max(1, Math.round(seconds / 60))} min`;
-}
-
-/** Shortest-to-longest across a session's recordings, e.g. "8–10 min". */
-export function lengthLabel(session: SessionPackage): string {
-  const lengths = (session.audio ?? []).map((variant) => variant.durationSeconds);
-  if (lengths.length === 0) return formatMinutes(session.defaultDurationSeconds);
-  const shortest = Math.round(Math.min(...lengths) / 60);
-  const longest = Math.round(Math.max(...lengths) / 60);
-  return shortest === longest ? `${shortest} min` : `${shortest}–${longest} min`;
-}
-
 /** Route query for a chosen recording, read back by the player and check-in. */
 export function versionQuery(variant: SessionAudioVariant | null): string {
   return variant ? `?mode=${variant.mode}&music=${variant.withMusic ? "1" : "0"}` : "";

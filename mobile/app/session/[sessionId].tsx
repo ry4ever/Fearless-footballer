@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { AppState, Pressable, Text, View } from "react-native";
 import {
   Redirect,
@@ -30,8 +30,15 @@ import {
   StatusCard,
   colors,
 } from "../../src/ui";
-import type { PlaybackEventRequest, SessionAudioVariant, SessionPackage } from "../../../shared/types";
-import { MODE_COPY, progressKey, variantFromParams, versionQuery } from "../../src/lib/sessionVersions";
+import type { PlaybackEventRequest, SessionAudioVariant, SessionMode, SessionPackage } from "../../../shared/types";
+import {
+  MODE_COPY,
+  availableModes,
+  hasMusicChoice,
+  progressKey,
+  variantFromParams,
+  versionQuery,
+} from "../../src/lib/sessionVersions";
 import {
   addPlaybackInterval,
   clamp,
@@ -53,15 +60,77 @@ const GUIDANCE = {
   relaxation: "Settle in and let Mark take you through it. Nothing to do but follow along.",
 } as const;
 
+/**
+ * Version picker at the bottom of the player: one row of modes plus a music
+ * switch. A mode's explanation shows only once it has been tapped.
+ */
+function VersionBar({
+  session,
+  variant,
+  explained,
+  onChoose,
+}: {
+  session: SessionPackage;
+  variant: SessionAudioVariant;
+  explained: SessionMode | null;
+  onChoose: (mode: SessionMode, withMusic: boolean, tapped: boolean) => void;
+}) {
+  const modes = availableModes(session);
+  return (
+    <View style={styles.versionBar} testID="version-bar">
+      <Text style={styles.versionLabel}>CHOOSE YOUR VERSION</Text>
+      <View style={styles.versionRow} accessibilityRole="radiogroup">
+        {modes.map((mode) => {
+          const selected = variant.mode === mode;
+          return (
+            <Pressable
+              key={mode}
+              accessibilityRole="radio"
+              accessibilityState={{ selected, checked: selected }}
+              accessibilityLabel={MODE_COPY[mode].label}
+              onPress={() => onChoose(mode, variant.withMusic, true)}
+              style={({ pressed }) => [styles.versionOption, selected && styles.versionOptionSelected, pressed && styles.pressed]}
+              testID={`version-${mode}`}
+            >
+              <Text style={[styles.versionOptionText, selected && styles.versionOptionTextSelected]} numberOfLines={1}>
+                {MODE_COPY[mode].label}
+              </Text>
+            </Pressable>
+          );
+        })}
+      </View>
+      {hasMusicChoice(session, variant.mode) ? (
+        <Pressable
+          accessibilityRole="switch"
+          accessibilityState={{ checked: variant.withMusic }}
+          accessibilityLabel="Music"
+          onPress={() => onChoose(variant.mode, !variant.withMusic, false)}
+          style={({ pressed }) => [styles.musicToggle, pressed && styles.pressed]}
+          testID="music-toggle"
+        >
+          <View style={[styles.musicBox, variant.withMusic && styles.musicBoxOn]}>
+            {variant.withMusic ? <Text style={styles.musicTick}>✓</Text> : null}
+          </View>
+          <Text style={styles.musicText}>Music</Text>
+        </Pressable>
+      ) : null}
+      {explained ? <Text style={styles.versionDetail}>{MODE_COPY[explained].detail}</Text> : null}
+    </View>
+  );
+}
+
 function PlayerScreen({
   session,
   variant,
   api,
+  versionBar,
 }: {
   session: SessionPackage;
   /** The chosen recording; null for older single-file sessions. */
   variant: SessionAudioVariant | null;
   api: ReturnType<typeof getApiFacade>;
+  /** Shown under the play controls. */
+  versionBar?: ReactNode;
 }) {
   const router = useRouter();
   const network = useNetworkState();
@@ -335,11 +404,7 @@ function PlayerScreen({
       >
         <Text style={styles.backButtonText}>← Athlete home</Text>
       </Pressable>
-      <PageTitle
-        eyebrow={variant ? `${MODE_COPY[variant.mode].label}${variant.withMusic ? "" : " · no music"}` : "Live rehearsal"}
-        title={session.title}
-        copy={session.subtitle}
-      />
+      <PageTitle eyebrow={session.focusArea ?? "Live rehearsal"} title={session.title} />
       <View style={styles.statusGrid}>
         <StatusCard tone={offline ? "warning" : "success"} title="Connection">
           {offline ? "Offline · progress is saved on this device" : "Online · ready to play"}
@@ -424,6 +489,7 @@ function PlayerScreen({
           </Text>
         </View>
       </View>
+      {versionBar}
       {eligible || finished ? (
         <Button
           label="Review completion"
@@ -447,6 +513,7 @@ function SessionRouteContent() {
   const [session, setSession] = useState<SessionPackage | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [explained, setExplained] = useState<SessionMode | null>(null);
 
   useEffect(() => {
     let mounted = true;
@@ -500,8 +567,22 @@ function SessionRouteContent() {
   }
   const api = getApiFacade({ role: "athlete" });
   const variant = variantFromParams(session, { mode, music });
+  const versionBar = variant ? (
+    <VersionBar
+      session={session}
+      variant={variant}
+      explained={explained}
+      onChoose={(nextMode, withMusic, tapped) => {
+        if (tapped) setExplained(nextMode);
+        // Each recording keeps its own saved position, so switching resumes it.
+        router.setParams({ mode: nextMode, music: withMusic ? "1" : "0" });
+      }}
+    />
+  ) : null;
   // A new recording means a new native player, so key the screen by it.
-  return <PlayerScreen key={variant?.url ?? session.id} session={session} variant={variant} api={api} />;
+  return (
+    <PlayerScreen key={variant?.url ?? session.id} session={session} variant={variant} api={api} versionBar={versionBar} />
+  );
 }
 
 export default function SessionScreen() {
@@ -580,4 +661,38 @@ const styles = {
     marginBottom: 5,
   },
   playbackMeterValue: { color: colors.white, fontSize: 15, fontWeight: "800" },
+  versionBar: { gap: 10, marginBottom: 16 },
+  versionLabel: { color: colors.cyan, fontSize: 11, fontWeight: "900", letterSpacing: 1 },
+  versionRow: {
+    flexDirection: "row",
+    gap: 4,
+    padding: 4,
+    borderRadius: 14,
+    backgroundColor: "rgba(255,255,255,0.06)",
+  },
+  versionOption: {
+    flex: 1,
+    minHeight: 44,
+    borderRadius: 10,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 4,
+  },
+  versionOptionSelected: { backgroundColor: colors.cyanStrong },
+  versionOptionText: { color: colors.muted, fontSize: 13, fontWeight: "800" },
+  versionOptionTextSelected: { color: "#050A19" },
+  musicToggle: { flexDirection: "row", alignItems: "center", gap: 8, alignSelf: "flex-start", minHeight: 44 },
+  musicBox: {
+    width: 22,
+    height: 22,
+    borderRadius: 6,
+    borderWidth: 1.5,
+    borderColor: colors.line,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  musicBoxOn: { backgroundColor: colors.cyanStrong, borderColor: colors.cyanStrong },
+  musicTick: { color: "#050A19", fontSize: 13, fontWeight: "900" },
+  musicText: { color: colors.white, fontSize: 14, fontWeight: "700" },
+  versionDetail: { color: colors.muted, fontSize: 14, lineHeight: 20 },
 } as const;

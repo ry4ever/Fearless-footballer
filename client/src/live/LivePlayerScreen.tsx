@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { ArrowLeft, ArrowRight, Check, Headphones, Pause, Play, RotateCcw } from "lucide-react";
 import type {
   CompletionSyncResponse,
@@ -20,10 +20,15 @@ export type CompletionOutcome =
 
 interface LivePlayerScreenProps {
   session: SessionPackage;
-  /** The chosen recording; null for older single-file sessions. */
-  variant: SessionAudioVariant | null;
   onBack: () => void;
   onComplete: (outcome: CompletionOutcome) => void;
+}
+
+interface PlayerCoreProps extends LivePlayerScreenProps {
+  /** The chosen recording; null for older single-file sessions. */
+  variant: SessionAudioVariant | null;
+  /** Version picker shown under the play controls. */
+  versionBar?: ReactNode;
 }
 
 /** The server only accepts a completion after 80% of the session. */
@@ -31,11 +36,83 @@ const REQUIRED_RATIO = 0.8;
 /** How long to wait for the voice track before falling back to guided prompts. */
 const AUDIO_LOAD_TIMEOUT_MS = 8000;
 
-const MODE_LABEL: Record<SessionMode, string> = {
-  interactive: "Interactive",
-  guidance: "Full Guidance",
-  relaxation: "Relaxation",
+const MODE_ORDER: SessionMode[] = ["interactive", "guidance", "relaxation"];
+
+const MODE_COPY: Record<SessionMode, { label: string; detail: string }> = {
+  interactive: { label: "Interactive", detail: "Guided in, then 45-second blocks to run your own passages of play." },
+  guidance: { label: "Full Guidance", detail: "Mark's voice with you the whole way through." },
+  relaxation: { label: "Relaxation", detail: "Deeper and calmer — for recovery, downtime or before sleep." },
 };
+
+/** The recording for a mode and music choice, falling back to the other music option. */
+function pickVariant(session: SessionPackage, mode: SessionMode, withMusic: boolean): SessionAudioVariant | null {
+  const variants = session.audio ?? [];
+  return (
+    variants.find((v) => v.mode === mode && v.withMusic === withMusic) ??
+    variants.find((v) => v.mode === mode) ??
+    null
+  );
+}
+
+/**
+ * Opens ready to play Interactive with music. The version bar at the bottom
+ * switches recordings; each has its own timeline, so switching starts the
+ * new one from the beginning. A version's explanation shows once it's tapped.
+ */
+export function LivePlayerScreen({ session, onBack, onComplete }: LivePlayerScreenProps) {
+  const modes = MODE_ORDER.filter((mode) => session.audio?.some((v) => v.mode === mode));
+  const [mode, setMode] = useState<SessionMode>(modes[0] ?? "interactive");
+  const [withMusic, setWithMusic] = useState(true);
+  const [explained, setExplained] = useState<SessionMode | null>(null);
+  const variant = pickVariant(session, mode, withMusic);
+  const hasMusicChoice =
+    Boolean(session.audio?.some((v) => v.mode === mode && v.withMusic)) &&
+    Boolean(session.audio?.some((v) => v.mode === mode && !v.withMusic));
+
+  const versionBar =
+    modes.length > 0 ? (
+      <section className="version-bar" aria-label="Choose your version">
+        <span className="eyebrow">CHOOSE YOUR VERSION</span>
+        <div className="live-segment" role="group" aria-label="Version">
+          {modes.map((item) => (
+            <button
+              key={item}
+              type="button"
+              aria-pressed={mode === item}
+              onClick={() => {
+                setMode(item);
+                setExplained(item);
+              }}
+            >
+              {MODE_COPY[item].label}
+            </button>
+          ))}
+        </div>
+        {hasMusicChoice && (
+          <label className="live-check version-music">
+            <input type="checkbox" checked={withMusic} onChange={(e) => setWithMusic(e.target.checked)} />
+            <span>Music</span>
+          </label>
+        )}
+        {explained && (
+          <p className="live-note version-detail" aria-live="polite">
+            {MODE_COPY[explained].detail}
+          </p>
+        )}
+      </section>
+    ) : null;
+
+  return (
+    <PlayerCore
+      key={variant?.url ?? session.id}
+      session={session}
+      variant={variant}
+      versionBar={versionBar}
+      onBack={onBack}
+      onComplete={onComplete}
+    />
+  );
+}
 
 /** Shown while playing when a session has no timed prompts. */
 const GUIDANCE: Record<SessionMode, string> = {
@@ -63,7 +140,7 @@ function newIdempotencyKey(sessionId: string) {
   return `web_${sessionId}_${random}`;
 }
 
-export function LivePlayerScreen({ session, variant, onBack, onComplete }: LivePlayerScreenProps) {
+function PlayerCore({ session, variant, versionBar, onBack, onComplete }: PlayerCoreProps) {
   const { user } = useSession();
   // Each recording has its own length; the 80% rule is measured against it.
   const duration = variant?.durationSeconds ?? session.defaultDurationSeconds;
@@ -307,12 +384,7 @@ export function LivePlayerScreen({ session, variant, onBack, onComplete }: LiveP
           <span>LESS</span>
         </div>
         {variant ? (
-          <span
-            style={{ minWidth: 42, padding: "6px 10px", borderRadius: 100, background: "rgba(255,255,255,0.08)", color: "#00F0FF", fontSize: "0.7rem", fontWeight: 700, whiteSpace: "nowrap" }}
-          >
-            {MODE_LABEL[variant.mode]}
-            {variant.withMusic ? "" : " · no music"}
-          </span>
+          <span style={{ width: 42 }} aria-hidden="true" />
         ) : (
           <button
             type="button"
@@ -329,7 +401,6 @@ export function LivePlayerScreen({ session, variant, onBack, onComplete }: LiveP
       <main className="player-body">
         <div className="player-title-block">
           <h1 className="player-main-title">{session.title}</h1>
-          <p className="live-copy" style={{ textAlign: "center" }}>{session.subtitle}</p>
         </div>
 
         <div className="mentor-row-compact">
@@ -443,6 +514,8 @@ export function LivePlayerScreen({ session, variant, onBack, onComplete }: LiveP
                 : "Audio unavailable – follow the prompts at your own pace"}
           </span>
         </div>
+
+        {versionBar}
 
         <div style={{ marginTop: 14 }}>
           <button

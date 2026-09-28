@@ -153,15 +153,6 @@
 .live-choice[aria-pressed="true"] { border-color: var(--cyan); background: rgba(105, 224, 250, 0.12); }
 .live-choice small { display: block; color: #8fa3c7; font-size: 12px; }
 
-/* Session descriptions (Markdown) */
-.live-markdown { color: #d6e2f5; font-size: 14px; line-height: 1.6; }
-.live-markdown h3 { margin: 18px 0 6px; color: var(--white); font-size: 15px; font-weight: 800; }
-.live-markdown h3:first-child { margin-top: 0; }
-.live-markdown p { margin: 0 0 10px; }
-.live-markdown ul { margin: 0 0 10px; padding-left: 18px; }
-.live-markdown li { margin-bottom: 6px; }
-.live-markdown li::marker { color: var(--cyan); }
-
 /* Library */
 .live-session-row {
   display: flex;
@@ -205,3 +196,10 @@
   font-weight: 700;
   letter-spacing: 0.06em;
 }
+
+/* Player version bar */
+.version-bar { display: flex; flex-direction: column; gap: 8px; width: 100%; margin-top: 16px; text-align: left; }
+.version-bar .live-segment button { min-height: 38px; font-size: 12px; }
+.version-bar .version-music { align-self: flex-start; align-items: center; font-weight: 600; }
+.version-bar .version-music input { width: 18px; height: 18px; margin-top: 0; }
+.version-bar .version-detail { margin: 0; text-align: left; }

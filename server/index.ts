@@ -7,6 +7,7 @@ import { z } from "zod";
 import {
   app as securityApp,
   authLimiter,
+  pairingClaimLimiter,
   passwordSchema,
   validateProductionConfig,
 } from "./lib/security";
@@ -20,6 +21,7 @@ import {
 import { sanitizeAuditDetails } from "./lib/audit";
 import { monitoring } from "./lib/monitoring";
 import { generateSignedMediaUrl } from "./lib/cdn";
+import { computeAthleteMetrics, localDayKey, type CompletionRecord } from "./lib/metrics";
 import {
   type AgeGateResponse,
   type AgeGateStatus,
@@ -55,6 +57,16 @@ const JWT_ACCESS_SECRET = process.env.JWT_ACCESS_SECRET || process.env.JWT_SECRE
 const JWT_REFRESH_SECRET = requiredRuntimeSecret("JWT_REFRESH_SECRET", TEST_REFRESH_SECRET);
 const ACCESS_TOKEN_TTL = process.env.ACCESS_TOKEN_TTL ?? "15m";
 const REFRESH_TOKEN_TTL = process.env.REFRESH_TOKEN_TTL ?? "30d";
+/** Seconds for a jsonwebtoken-style TTL ("15m", "1h", "900s"; bare numbers are ms, as in jsonwebtoken). */
+function ttlToSeconds(ttl: string): number {
+  const match = /^(\d+)\s*(ms|s|m|h|d)?$/i.exec(ttl.trim());
+  if (!match) return 900;
+  const value = Number(match[1]);
+  const unit = (match[2] ?? "ms").toLowerCase();
+  const multiplier = { ms: 0.001, s: 1, m: 60, h: 3600, d: 86400 }[unit] ?? 1;
+  return Math.max(1, Math.round(value * multiplier));
+}
+const ACCESS_TOKEN_TTL_SECONDS = ttlToSeconds(ACCESS_TOKEN_TTL);
 const CONSENT_POLICY_VERSION = process.env.CONSENT_POLICY_VERSION ?? "beta-v1";
 
 validateProductionConfig();
@@ -262,13 +274,18 @@ function generatePairingCode(): string {
 // Metrics calculation (deterministic, timezone-aware)
 // =============================================================================
 
-function getWeekStart(date: Date): Date {
-  const start = new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()));
-  const day = start.getUTCDay() || 7;
-  start.setUTCDate(start.getUTCDate() - day + 1);
-  return start;
+async function loadCompletionRecords(userId: string): Promise<CompletionRecord[]> {
+  const completions = await prisma.sessionCompleted.findMany({
+    where: { userId },
+    select: { completedAt: true, reflection: { select: { id: true } } },
+  });
+  return completions.map((completion) => ({
+    completedAt: completion.completedAt,
+    hasReflection: completion.reflection !== null,
+  }));
 }
 
+/** Weekly view of an athlete's progress, derived only from completion history. */
 async function calculateMetrics(userId: string, now: Date) {
   const athlete = await prisma.athleteProfile.findUnique({
     where: { userId },
@@ -277,69 +294,21 @@ async function calculateMetrics(userId: string, now: Date) {
   if (!athlete) return null;
 
   const timezone = athlete.user.timezone || "UTC";
-  const weekStart = getWeekStart(now);
-
-  const completions = await prisma.sessionCompleted.findMany({
-    where: { userId },
-    orderBy: { completedAt: "desc" },
-    include: { reflection: true },
-  });
-
-  const weeklyCompletions = completions.filter((completion) => {
-    const completionDate = new Date(completion.completedAt);
-    return completionDate >= weekStart;
-  });
-
-  const completedDays = Array.from(new Set(weeklyCompletions.map((completion) => completion.completedAt.toISOString().slice(0, 10)))).length;
-
-  let streak = 0;
-  let cursor = new Date(now);
-  cursor = new Date(cursor.getFullYear(), cursor.getMonth(), cursor.getDate());
-  const seen = new Set(completions.map((completion) => completion.completedAt.toISOString().slice(0, 10)));
-  while (seen.has(cursor.toISOString().slice(0, 10))) {
-    streak += 1;
-    cursor = new Date(cursor.getTime() - 24 * 60 * 60 * 1000);
-  }
-
-  let bestStreak = 0;
-  let current = 0;
-  let previous: Date | undefined;
-  const days = Array.from(new Set(completions.map((completion) => completion.completedAt.toISOString().slice(0, 10)))).sort();
-  for (const day of days) {
-    const date = new Date(`${day}T00:00:00.000Z`);
-    if (previous && date.getTime() - previous.getTime() === 24 * 60 * 60 * 1000) {
-      current += 1;
-    } else {
-      current = 1;
-    }
-    bestStreak = Math.max(bestStreak, current);
-    previous = date;
-  }
-
-  const previousScore = athlete.composureScore;
-  const completionBonus = weeklyCompletions.length * 2;
-  const reflectionBonus = completions.filter((c) => c.reflection).length > 0 ? 1 : 0;
-  const streakBonus = Math.min(streak, 3) * 1;
-  const newScore = Math.min(100, Math.max(0, previousScore + completionBonus + reflectionBonus + streakBonus));
-
-  const sevenDayPattern = Array.from({ length: 7 }, (_, index) => {
-    const date = new Date(now);
-    date.setUTCDate(date.getUTCDate() - (6 - index));
-    return weeklyCompletions.some(
-      (completion) => completion.completedAt.toISOString().slice(0, 10) === date.toISOString().slice(0, 10),
-    );
-  });
+  const records = await loadCompletionRecords(userId);
+  const metrics = computeAthleteMetrics(records, timezone, now);
 
   return {
     athlete,
-    weeklyCompletions,
-    completedDays,
-    currentStreak: streak,
-    bestStreak,
-    previousScore,
-    newScore,
-    delta: newScore - previousScore,
-    sevenDayPattern,
+    timezone,
+    records,
+    completedDays: metrics.activeDaysLast7,
+    currentStreak: metrics.currentStreak,
+    bestStreak: metrics.bestStreak,
+    previousScore: metrics.scoreWeekAgo,
+    newScore: metrics.score,
+    delta: metrics.score - metrics.scoreWeekAgo,
+    sevenDayPattern: metrics.sevenDayPattern,
+    scoreTrend: metrics.scoreTrend,
   };
 }
 
@@ -417,7 +386,7 @@ async function registerAccountHandler(req: Request, res: Response) {
   const tokens: AuthTokenSet = {
     accessToken: createAccessToken(user.id, request.role),
     refreshToken: createRefreshToken(user.id, request.role, 1),
-    expiresIn: Number.parseInt(ACCESS_TOKEN_TTL.replace(/\D/g, "")) || 900,
+    expiresIn: ACCESS_TOKEN_TTL_SECONDS,
   };
 
   const userAccount: UserAccount = {
@@ -494,7 +463,7 @@ async function signInAccountHandler(req: Request, res: Response) {
   const tokens: AuthTokenSet = {
     accessToken: createAccessToken(user.id, role),
     refreshToken: createRefreshToken(user.id, role, user.refreshVersion),
-    expiresIn: Number.parseInt(ACCESS_TOKEN_TTL.replace(/\D/g, "")) || 900,
+    expiresIn: ACCESS_TOKEN_TTL_SECONDS,
   };
 
   const athleteProfile = await prisma.athleteProfile.findUnique({ where: { userId: user.id } });
@@ -570,12 +539,18 @@ async function createPairingCodeHandler(req: Request, res: Response) {
     return;
   }
 
+  // Until a caregiver claims it, a link's caregiverUserId holds the athlete's
+  // own id as a placeholder. Clear out unclaimed placeholders (in any status,
+  // so a declined code can't block the unique athlete/caregiver pair) and
+  // expired pending links, so the athlete can always issue a fresh code.
   const now = new Date();
   await prisma.caregiverLink.deleteMany({
     where: {
       athleteId: athlete.id,
-      status: "PENDING",
-      pairingExpiresAt: { lt: now },
+      OR: [
+        { caregiverUserId: req.auth.userId },
+        { status: "PENDING", pairingExpiresAt: { lt: now } },
+      ],
     },
   });
 
@@ -584,7 +559,7 @@ async function createPairingCodeHandler(req: Request, res: Response) {
     orderBy: { createdAt: "asc" },
   });
   if (existingLink) {
-    res.status(409).json({ error: "This athlete already has a pending pairing relationship" });
+    res.status(409).json({ error: "Approve or decline the pending caregiver request first" });
     return;
   }
 
@@ -651,7 +626,8 @@ async function claimPairingCodeHandler(req: Request, res: Response) {
     return;
   }
 
-  if (link.status !== "PENDING") {
+  const alreadyClaimed = link.caregiverUserId !== link.athlete.userId || link.consentedAt !== null;
+  if (link.status !== "PENDING" || alreadyClaimed) {
     res.status(409).json({ error: "That pairing code has already been used" });
     return;
   }
@@ -661,21 +637,39 @@ async function claimPairingCodeHandler(req: Request, res: Response) {
     return;
   }
 
-  const updated = await prisma.caregiverLink.update({
-    where: { id: link.id },
-    data: {
-      caregiverUserId: req.auth.userId,
-      relationship: request.relationship,
-      status: "PENDING",
-      coppaConsent: request.consentConfirmed,
-      consentPolicyVersion: CONSENT_POLICY_VERSION,
-      consentSource: "caregiver_claim",
-      consentActorId: req.auth.userId,
-      consentedAt: new Date(),
-      consentRevokedAt: null,
-      revokedAt: null,
-    },
-    include: { athlete: { include: { user: true } } },
+  const caregiverUserId = req.auth.userId;
+  const priorLink = await prisma.caregiverLink.findUnique({
+    where: { athleteId_caregiverUserId: { athleteId: link.athleteId, caregiverUserId } },
+  });
+  if (priorLink && priorLink.status !== "REVOKED") {
+    res.status(409).json({ error: "You are already linked to this athlete" });
+    return;
+  }
+
+  const updated = await prisma.$transaction(async (tx) => {
+    // A revoked link from an earlier pairing would violate the unique
+    // athlete/caregiver pair; the audit log keeps the history.
+    if (priorLink) {
+      await tx.caregiverLink.delete({ where: { id: priorLink.id } });
+    }
+    return tx.caregiverLink.update({
+      where: { id: link.id },
+      data: {
+        caregiverUserId,
+        relationship: request.relationship,
+        status: "PENDING",
+        coppaConsent: request.consentConfirmed,
+        consentPolicyVersion: CONSENT_POLICY_VERSION,
+        consentSource: "caregiver_claim",
+        consentActorId: caregiverUserId,
+        consentedAt: new Date(),
+        consentRevokedAt: null,
+        revokedAt: null,
+        // Single use: the code can't be claimed again.
+        pairingCodeHash: null,
+      },
+      include: { athlete: { include: { user: true } } },
+    });
   });
 
   res.json({
@@ -731,6 +725,11 @@ async function approvePairingHandler(req: Request, res: Response) {
 
   if (link.status !== "PENDING") {
     res.status(409).json({ error: "This relationship is no longer pending" });
+    return;
+  }
+
+  if (link.caregiverUserId === req.auth.userId || !link.consentedAt) {
+    res.status(409).json({ error: "A caregiver has not entered this pairing code yet" });
     return;
   }
 
@@ -947,7 +946,7 @@ async function refreshTokenHandler(req: Request, res: Response) {
   const tokens: AuthTokenSet = {
     accessToken: createAccessToken(rotatedUser.id, role),
     refreshToken: createRefreshToken(rotatedUser.id, role, rotatedUser.refreshVersion),
-    expiresIn: Number.parseInt(ACCESS_TOKEN_TTL.replace(/\D/g, "")) || 900,
+    expiresIn: ACCESS_TOKEN_TTL_SECONDS,
   };
 
   res.json(tokens);
@@ -1159,11 +1158,25 @@ async function completeSessionHandler(req: Request, res: Response) {
   }
 
   const now = new Date();
-  const metrics = await calculateMetrics(req.auth.userId, now);
-  if (!metrics) {
+  const completedAt = new Date(request.completedAt);
+  if (completedAt.getTime() > now.getTime() + 5 * 60 * 1000) {
+    res.status(422).json({ error: "Completion time cannot be in the future" });
+    return;
+  }
+
+  const current = await calculateMetrics(req.auth.userId, now);
+  if (!current) {
     res.status(404).json({ error: "Athlete profile not found" });
     return;
   }
+  // Metrics must include the rep being recorded now, not lag one rep behind.
+  const before = computeAthleteMetrics(current.records, current.timezone, now);
+  const after = computeAthleteMetrics(
+    [...current.records, { completedAt, hasReflection: Boolean(request.reflection) }],
+    current.timezone,
+    now,
+  );
+  const weeklyDelta = after.score - after.scoreWeekAgo;
 
   let completion: { id: string };
   try {
@@ -1174,7 +1187,7 @@ async function completeSessionHandler(req: Request, res: Response) {
           sessionId: session.id,
           mode: "INTERACTIVE",
           durationSeconds: request.completionDurationSeconds,
-          completedAt: new Date(request.completedAt),
+          completedAt,
           idempotencyKey,
           reflection: request.reflection
             ? {
@@ -1195,22 +1208,22 @@ async function completeSessionHandler(req: Request, res: Response) {
       await tx.athleteProfile.update({
         where: { id: athlete.id },
         data: {
-          composureScore: metrics.newScore,
-          currentStreak: metrics.currentStreak,
-          bestStreak: metrics.bestStreak,
-          lastSessionAt: new Date(request.completedAt),
+          composureScore: after.score,
+          currentStreak: after.currentStreak,
+          bestStreak: after.bestStreak,
+          lastSessionAt: completedAt,
         },
       });
 
       await tx.metricSnapshot.create({
         data: {
           athleteProfileId: athlete.id,
-          weekStartDate: metrics.weeklyCompletions[0]?.completedAt ?? now,
-          composureScore: metrics.newScore,
-          composureDelta: metrics.delta,
-          repsCompleted: metrics.completedDays,
-          streakDays: metrics.currentStreak,
-          inferredMoodTrend: metrics.delta > 0 ? "Improving" : "Steady",
+          weekStartDate: new Date(`${after.weekStartKey}T00:00:00.000Z`),
+          composureScore: after.score,
+          composureDelta: weeklyDelta,
+          repsCompleted: after.activeDaysLast7,
+          streakDays: after.currentStreak,
+          inferredMoodTrend: weeklyDelta > 0 ? "Improving" : "Steady",
         },
       });
 
@@ -1229,14 +1242,14 @@ async function completeSessionHandler(req: Request, res: Response) {
   }
 
   const streak = {
-    currentStreakDays: metrics.currentStreak,
-    bestStreakDays: metrics.bestStreak,
-    isNewMilestone: metrics.currentStreak > 0,
+    currentStreakDays: after.currentStreak,
+    bestStreakDays: after.bestStreak,
+    isNewMilestone: after.bestStreak > before.bestStreak,
   };
   const composure = {
-    previousScore: metrics.previousScore,
-    newScore: metrics.newScore,
-    delta: metrics.delta,
+    previousScore: before.score,
+    newScore: after.score,
+    delta: after.score - before.score,
   };
 
   res.json({
@@ -1244,9 +1257,9 @@ async function completeSessionHandler(req: Request, res: Response) {
     streak,
     composure,
     weeklyProgress: {
-      completedDays: metrics.completedDays,
+      completedDays: after.activeDaysLast7,
       targetDays: 7,
-      sevenDayPattern: metrics.sevenDayPattern,
+      sevenDayPattern: after.sevenDayPattern,
     },
   });
 
@@ -1336,7 +1349,7 @@ async function getCaregiverDashboardHandler(req: Request, res: Response) {
       description:
         metrics.completedDays === 0
           ? "The athlete is ready to complete the first beta session."
-          : `The athlete completed ${metrics.completedDays} mindset reps this week.`,
+          : `The athlete completed mindset reps on ${metrics.completedDays} of the last 7 days.`,
       daysCompleted: metrics.completedDays,
       daysTarget: 7,
       sevenDayPattern: metrics.sevenDayPattern,
@@ -1345,7 +1358,7 @@ async function getCaregiverDashboardHandler(req: Request, res: Response) {
       moodTrend: {
         status: "Steady",
         subtitle: "A private post-rep check-in was completed.",
-        trendData: [metrics.newScore],
+        trendData: metrics.scoreTrend,
       },
       composureScore: {
         value: metrics.newScore,
@@ -1360,7 +1373,7 @@ async function getCaregiverDashboardHandler(req: Request, res: Response) {
         duration: durationText,
         completedAt: lastCompletion?.completedAt.toISOString() ?? new Date().toISOString(),
         completedToday: lastCompletion
-          ? lastCompletion.completedAt.toISOString().slice(0, 10) === now.toISOString().slice(0, 10)
+          ? localDayKey(lastCompletion.completedAt, metrics.timezone) === localDayKey(now, metrics.timezone)
           : false,
       },
     },
@@ -1419,8 +1432,7 @@ async function getAthleteProgressHandler(req: Request, res: Response) {
         duration: `${Math.floor(lastCompletion.durationSeconds / 60)} min ${lastCompletion.durationSeconds % 60} sec`,
         completedAt: lastCompletion.completedAt.toISOString(),
         completedToday:
-          lastCompletion.completedAt.toISOString().slice(0, 10) ===
-          now.toISOString().slice(0, 10),
+          localDayKey(lastCompletion.completedAt, metrics.timezone) === localDayKey(now, metrics.timezone),
       }
     : { title: "No completed reps", duration: "", completedAt: "", completedToday: false };
 
@@ -1438,7 +1450,7 @@ async function getAthleteProgressHandler(req: Request, res: Response) {
     moodTrend: {
       status: "Steady",
       subtitle: "A private post-rep check-in was completed.",
-      trendValues: [metrics.newScore],
+      trendValues: metrics.scoreTrend,
     },
   };
 
@@ -1923,7 +1935,7 @@ app.post("/auth/password/reset", authLimiter, wrap(passwordResetConfirmHandler))
 app.delete("/auth/account", wrap(authenticate), wrap(deleteAccountHandler));
 app.post("/auth/age-gate", wrap(ageGateHandler));
 app.post("/auth/pairing/code", wrap(authenticate), requireRole("athlete"), wrap(createPairingCodeHandler));
-app.post("/auth/pairing/claim", wrap(authenticate), requireRole("caregiver"), wrap(claimPairingCodeHandler));
+app.post("/auth/pairing/claim", wrap(authenticate), requireRole("caregiver"), pairingClaimLimiter, wrap(claimPairingCodeHandler));
 app.post("/auth/pairing/:linkId/approve", wrap(authenticate), requireRole("athlete"), wrap(approvePairingHandler));
 app.delete("/auth/pairing/:linkId", wrap(authenticate), requireRole("athlete"), wrap(revokePairingHandler));
 app.delete("/auth/consent/:linkId", wrap(authenticate), wrap(revokeConsentHandler));

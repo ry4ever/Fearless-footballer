@@ -39,6 +39,19 @@ const authLimiter = rateLimit({
   message: { error: "Too many sign-in attempts. Try again later." },
 });
 
+// Pairing codes are short, so cap guesses per caregiver account. Runs after
+// authenticate, so every request has a user id to key on.
+const pairingStore = new MemoryStore();
+const pairingClaimLimiter = rateLimit({
+  store: pairingStore,
+  windowMs: 15 * 60 * 1000,
+  limit: Number.parseInt(process.env.RATE_LIMIT_PAIRING_LIMIT ?? "10", 10) || 10,
+  standardHeaders: "draft-7",
+  legacyHeaders: false,
+  keyGenerator: (req) => `caregiver:${req.auth?.userId ?? "anonymous"}`,
+  message: { error: "Too many pairing attempts. Try again later." },
+});
+
 const globalLimiter = rateLimit({
   store: globalStore,
   windowMs: Number.parseInt(process.env.RATE_LIMIT_GLOBAL_WINDOW_MS ?? "900000", 10) || 15 * 60 * 1000,
@@ -183,12 +196,13 @@ export function validateProductionConfig() {
   }
 }
 
-export { app, authLimiter, globalLimiter, corsOrigin, passwordSchema };
+export { app, authLimiter, pairingClaimLimiter, globalLimiter, corsOrigin, passwordSchema };
 
 export async function resetRateLimiters(): Promise<void> {
   // Integration tests run in a single process; clear every key between tests
   // so requests from one test cannot affect a later test. Production behavior
   // is unchanged because this helper is only called by the test suite.
   authStore.resetAll();
+  pairingStore.resetAll();
   globalStore.resetAll();
 }

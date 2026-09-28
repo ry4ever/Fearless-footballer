@@ -26,7 +26,7 @@ import type {
   SessionRetrieveResponse,
   SignInAccountRequest,
 } from "../../../shared/types";
-import type { AthleteProgress, UserAccount } from "../../../shared/types";
+import type { AthleteProgress, PairingStatusResponse, UserAccount } from "../../../shared/types";
 import {
   loadSessionState,
   saveSessionState,
@@ -198,7 +198,22 @@ async function resolveAccessToken(role: BetaUserRole): Promise<string | null> {
   return null;
 }
 
-async function refreshTokens(role: BetaUserRole, refreshToken: string): Promise<AuthTokenSet | null> {
+// The server rotates refresh tokens on every use, so concurrent 401s must share
+// one refresh call. Otherwise the losers present an already-rotated token, get
+// a 401, and clear the fresh tokens the winner just saved.
+const inFlightRefreshes = new Map<string, Promise<AuthTokenSet | null>>();
+
+function refreshTokens(role: BetaUserRole, refreshToken: string): Promise<AuthTokenSet | null> {
+  const existing = inFlightRefreshes.get(refreshToken);
+  if (existing) return existing;
+  const pending = performRefresh(role, refreshToken).finally(() => {
+    inFlightRefreshes.delete(refreshToken);
+  });
+  inFlightRefreshes.set(refreshToken, pending);
+  return pending;
+}
+
+async function performRefresh(role: BetaUserRole, refreshToken: string): Promise<AuthTokenSet | null> {
   try {
     const result = await request<AuthTokenSet>(
       "POST",
@@ -210,12 +225,24 @@ async function refreshTokens(role: BetaUserRole, refreshToken: string): Promise<
       await saveTokens(role, result.data);
       return result.data;
     }
-    // Refresh failed — clear stale tokens so the session provider can redirect.
-    await clearTokens(role);
+    // Refresh failed. Only clear tokens if they haven't been replaced meanwhile
+    // (e.g. by a sign-in or another refresh that completed first).
+    const { refresh: current } = await getTokens(role);
+    if (current === refreshToken) {
+      await clearTokens(role);
+    }
     return null;
   } catch {
     return null;
   }
+}
+
+/**
+ * A 4xx the client can't fix by retrying (e.g. 422 too short, 404 session
+ * retired). Auth, timeout, and rate-limit responses stay retryable.
+ */
+function isPermanentRejection(status: number): boolean {
+  return status >= 400 && status < 500 && ![401, 408, 429].includes(status);
 }
 
 function computeBackoff(attempt: number): number {
@@ -459,6 +486,13 @@ export const apiClient = {
     );
   },
 
+  async getPairingStatus(role: BetaUserRole): Promise<ApiResult<PairingStatusResponse>> {
+    return apiRequest<PairingStatusResponse>("GET", "/auth/pairing", undefined, {
+      role,
+      authenticated: true,
+    });
+  },
+
   async revokePairing(role: BetaUserRole, linkId: string): Promise<ApiResult<PairingApprovalResponse>> {
     return apiRequest<PairingApprovalResponse>("DELETE", `/auth/pairing/${linkId}`, undefined, {
       role,
@@ -589,6 +623,14 @@ export const apiClient = {
             },
           );
           synced += 1;
+        } else if (isPermanentRejection(result.status)) {
+          nextState = {
+            ...nextState,
+            offlineCompletionQueue: (nextState.offlineCompletionQueue ?? []).filter(
+              (queued) => queued.request.idempotencyKey !== item.request.idempotencyKey,
+            ),
+          };
+          failed += 1;
         } else {
           const error = result.error?.error ?? `Server returned ${result.status}`;
           nextState = updateOfflineCompletionQueueItem(

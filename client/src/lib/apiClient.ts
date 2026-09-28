@@ -109,11 +109,12 @@ class ApiClient {
           return null;
         }
 
-        const data = await res.json();
-        this.setTokens(data.tokens);
-        return data.tokens;
+        // The server returns the rotated token set directly, not wrapped in { tokens }.
+        const tokens = (await res.json()) as AuthTokenSet;
+        this.setTokens(tokens);
+        return tokens;
       } catch {
-        this.setTokens(null);
+        // Network failure: keep the stored tokens so the user isn't signed out while offline.
         return null;
       } finally {
         this.refreshPromise = null;

@@ -5,6 +5,21 @@ import { z } from "zod";
 
 const app = express();
 
+// Behind Railway/Render/Vercel every request arrives from the platform proxy.
+// Without trusting it, req.ip is the proxy's address and all users share one
+// rate-limit bucket. TRUST_PROXY accepts a hop count, "true"/"false", or an
+// Express trust-proxy string (e.g. "loopback, 10.0.0.0/8").
+function resolveTrustProxy(): boolean | number | string {
+  const raw = process.env.TRUST_PROXY?.trim();
+  if (!raw) return process.env.NODE_ENV === "production" ? 1 : false;
+  if (raw === "true") return true;
+  if (raw === "false") return false;
+  const hops = Number(raw);
+  return Number.isInteger(hops) && hops >= 0 ? hops : raw;
+}
+
+app.set("trust proxy", resolveTrustProxy());
+
 const passwordSchema = z
   .string()
   .min(8, "Password must be at least 8 characters")
@@ -22,6 +37,19 @@ const authLimiter = rateLimit({
   standardHeaders: "draft-7",
   legacyHeaders: false,
   message: { error: "Too many sign-in attempts. Try again later." },
+});
+
+// Pairing codes are short, so cap guesses per caregiver account. Runs after
+// authenticate, so every request has a user id to key on.
+const pairingStore = new MemoryStore();
+const pairingClaimLimiter = rateLimit({
+  store: pairingStore,
+  windowMs: 15 * 60 * 1000,
+  limit: Number.parseInt(process.env.RATE_LIMIT_PAIRING_LIMIT ?? "10", 10) || 10,
+  standardHeaders: "draft-7",
+  legacyHeaders: false,
+  keyGenerator: (req) => `caregiver:${req.auth?.userId ?? "anonymous"}`,
+  message: { error: "Too many pairing attempts. Try again later." },
 });
 
 const globalLimiter = rateLimit({
@@ -93,7 +121,7 @@ app.use((req: Request, res: Response, next: NextFunction) => {
   if (isAllowedOrigin(origin)) {
     res.header("Access-Control-Allow-Origin", origin && origin !== "null" ? origin : corsOrigin);
     res.header("Access-Control-Allow-Headers", "Authorization, Content-Type, Idempotency-Key");
-    res.header("Access-Control-Allow-Methods", "GET,POST,DELETE,OPTIONS");
+    res.header("Access-Control-Allow-Methods", "GET,POST,PATCH,DELETE,OPTIONS");
     res.header("Vary", "Origin");
   }
 
@@ -168,12 +196,13 @@ export function validateProductionConfig() {
   }
 }
 
-export { app, authLimiter, globalLimiter, corsOrigin, passwordSchema };
+export { app, authLimiter, pairingClaimLimiter, globalLimiter, corsOrigin, passwordSchema };
 
 export async function resetRateLimiters(): Promise<void> {
   // Integration tests run in a single process; clear every key between tests
   // so requests from one test cannot affect a later test. Production behavior
   // is unchanged because this helper is only called by the test suite.
   authStore.resetAll();
+  pairingStore.resetAll();
   globalStore.resetAll();
 }

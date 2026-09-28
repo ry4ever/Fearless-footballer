@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
-import { app } from "../index";
+import { app, createAccessToken } from "../index";
+import { encryptPII, hashEmail } from "../lib/pii";
 import { PrismaClient } from "@prisma/client";
 
 const prisma = new PrismaClient();
@@ -9,6 +10,8 @@ let server: ReturnType<typeof app.listen>;
 describe("Phase 9 — Beta Feedback & Operational Dashboard API", () => {
   let athleteToken: string;
   let caregiverToken: string;
+  let adminToken: string;
+  let adminUserId: string;
 
   beforeAll(async () => {
     // Start listening on ephemeral port
@@ -57,9 +60,27 @@ describe("Phase 9 — Beta Feedback & Operational Dashboard API", () => {
     expect(caregiverRes.status).toBe(201);
     const caregiverData = (await caregiverRes.json()) as any;
     caregiverToken = caregiverData.tokens.accessToken;
+
+    // 3. Mentor admin accounts are provisioned directly, never self-registered.
+    const adminEmail = `phase9_admin_${Date.now()}@fearlessfootballer.com`;
+    const admin = await prisma.user.create({
+      data: {
+        email: encryptPII(adminEmail),
+        emailHash: hashEmail(adminEmail),
+        passwordHash: "not-used-in-this-test",
+        role: "MENTOR_ADMIN",
+        fullName: encryptPII("Beta Admin User"),
+        timezone: "UTC",
+      },
+    });
+    adminUserId = admin.id;
+    adminToken = createAccessToken(admin.id, "mentor_admin");
   });
 
   afterAll(async () => {
+    if (adminUserId) {
+      await prisma.user.delete({ where: { id: adminUserId } }).catch(() => undefined);
+    }
     if (server) {
       await new Promise<void>((resolve) => server.close(() => resolve()));
     }
@@ -106,11 +127,11 @@ describe("Phase 9 — Beta Feedback & Operational Dashboard API", () => {
     expect(res.status).toBe(401);
   });
 
-  it("GET /admin/beta-dashboard — should return beta activity metrics to caregiver/admin", async () => {
+  it("GET /admin/beta-dashboard — should return beta activity metrics to a mentor admin", async () => {
     const res = await fetch(`${baseUrl}/admin/beta-dashboard`, {
       method: "GET",
       headers: {
-        Authorization: `Bearer ${caregiverToken}`,
+        Authorization: `Bearer ${adminToken}`,
       },
     });
 
@@ -120,6 +141,43 @@ describe("Phase 9 — Beta Feedback & Operational Dashboard API", () => {
     expect(body.totalAthletes).toBeGreaterThan(0);
     expect(Array.isArray(body.feedbackItems)).toBe(true);
     expect(body.feedbackItems.length).toBeGreaterThan(0);
+  });
+
+  it("GET /admin/beta-dashboard — should forbid caregiver access", async () => {
+    const res = await fetch(`${baseUrl}/admin/beta-dashboard`, {
+      method: "GET",
+      headers: {
+        Authorization: `Bearer ${caregiverToken}`,
+      },
+    });
+
+    expect(res.status).toBe(403);
+  });
+
+  it("POST /admin/sessions — should forbid caregiver access", async () => {
+    const res = await fetch(`${baseUrl}/admin/sessions`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${caregiverToken}`,
+      },
+      body: JSON.stringify({ slug: "x", title: "x", voiceStreamUrl: "x" }),
+    });
+
+    expect(res.status).toBe(403);
+  });
+
+  it("PATCH /admin/sessions/:id/publish — returns 404 for an unknown session instead of crashing", async () => {
+    const res = await fetch(`${baseUrl}/admin/sessions/does-not-exist/publish`, {
+      method: "PATCH",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${adminToken}`,
+      },
+      body: JSON.stringify({ isPublished: true }),
+    });
+
+    expect(res.status).toBe(404);
   });
 
   it("GET /admin/beta-dashboard — should forbid unauthorized athlete access", async () => {

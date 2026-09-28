@@ -327,6 +327,100 @@ describe.skipIf(!process.env.DATABASE_URL)("Phase 2 Security Integration Tests",
   );
 
   it(
+    "supports re-pairing after revoke and blocks code hijacking",
+    async () => {
+      const stamp = Date.now();
+      const athleteReg = await registerAthlete(`athlete-repair-${stamp}@example.com`, "Password123", "2010-01-01");
+      expect(athleteReg.status).toBe(201);
+      const athleteData = await athleteReg.json();
+      const athleteAccess = athleteData.tokens.accessToken;
+      expect(athleteData.tokens.expiresIn).toBe(900);
+
+      const registerCaregiver = async (label: string) => {
+        const res = await fetch(`${baseUrl}/auth/register`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            role: "caregiver",
+            email: `caregiver-${label}-${stamp}@example.com`,
+            password: "Password123",
+            privacyAcknowledged: true,
+          }),
+        });
+        expect(res.status).toBe(201);
+        return (await res.json()).tokens.accessToken as string;
+      };
+      const caregiverA = await registerCaregiver("a");
+      const caregiverB = await registerCaregiver("b");
+
+      // An unclaimed code can't be approved, and the athlete can re-issue it.
+      const firstCode = await (await createPairingCode(athleteAccess)).json();
+      const placeholder = await prisma.caregiverLink.findFirstOrThrow({ where: { status: "PENDING" } });
+      expect((await approvePairing(athleteAccess, placeholder.id, true)).status).toBe(409);
+      const reissued = await createPairingCode(athleteAccess);
+      expect(reissued.status).toBe(200);
+      const { pairingCode } = await reissued.json();
+      expect((await claimPairingCode(caregiverA, firstCode.pairingCode)).status).toBe(404);
+
+      // Caregiver A claims; caregiver B can't take over the same code.
+      const claim = await claimPairingCode(caregiverA, pairingCode);
+      expect(claim.status).toBe(200);
+      const { linkId } = await claim.json();
+      expect((await claimPairingCode(caregiverB, pairingCode)).status).toBe(404);
+      expect((await approvePairing(athleteAccess, linkId, true)).status).toBe(200);
+
+      // Revoke, then pair with the same caregiver again.
+      const revoke = await fetch(`${baseUrl}/auth/pairing/${linkId}`, {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${athleteAccess}` },
+      });
+      expect(revoke.status).toBe(200);
+      const secondCode = await createPairingCode(athleteAccess);
+      expect(secondCode.status).toBe(200);
+      const reclaim = await claimPairingCode(caregiverA, (await secondCode.json()).pairingCode);
+      expect(reclaim.status).toBe(200);
+      const reapprove = await approvePairing(athleteAccess, (await reclaim.json()).linkId, true);
+      expect(reapprove.status).toBe(200);
+      expect((await reapprove.json()).status).toBe("active");
+
+      // Each side can read the current link, which is how the other device learns about it.
+      const pairingFor = async (token: string) =>
+        (
+          await (
+            await fetch(`${baseUrl}/auth/pairing`, { headers: { Authorization: `Bearer ${token}` } })
+          ).json()
+        ).pairing;
+      const athletePairing = await pairingFor(athleteAccess);
+      expect(athletePairing.status).toBe("active");
+      expect(athletePairing.consentStatus).toBe("granted");
+      expect(athletePairing.athleteId).toBe(athleteData.user.id);
+      expect((await pairingFor(caregiverA)).id).toBe(athletePairing.id);
+      expect(await pairingFor(caregiverB)).toBeNull();
+
+      // Completion metrics include the rep just recorded; retries are idempotent.
+      const session = await prisma.session.findFirstOrThrow({ where: { isPublished: true } });
+      const completion = await completeSession(athleteAccess, session.id, `repair-${stamp}`);
+      expect(completion.status).toBe(200);
+      const result = await completion.json();
+      expect(result.streak.currentStreakDays).toBe(1);
+      expect(result.weeklyProgress.completedDays).toBe(1);
+      expect(result.composure.newScore).toBeGreaterThan(result.composure.previousScore);
+
+      const retry = await completeSession(athleteAccess, session.id, `repair-${stamp}`);
+      expect(retry.status).toBe(200);
+      expect((await retry.json()).completionId).toBe(result.completionId);
+
+      // Viewing progress repeatedly doesn't change the score.
+      const first = await (await getAthleteProgress(athleteAccess)).json();
+      const second = await (await getAthleteProgress(athleteAccess)).json();
+      expect(first.score).toBe(result.composure.newScore);
+      expect(second.score).toBe(first.score);
+      expect(first.moodTrend.trendValues).toHaveLength(7);
+    },
+    { timeout: 120000 }
+  );
+
+  it(
     "caregiver dashboard returns aggregate data only (no private reflections)",
     async () => {
       // Setup athlete + caregiver + active link (reuse flow)

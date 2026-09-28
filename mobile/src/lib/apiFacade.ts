@@ -40,12 +40,17 @@ import {
   PlaybackEventRequest,
 } from "../../../shared/types";
 import { LocalBetaApi, createLocalBetaApi, LocalApiError } from "./localBetaApi";
-import { apiClient } from "./apiClient";
+import { apiClient, NetworkError } from "./apiClient";
 import { getApiMode, isProductionApi } from "./apiMode";
 import {
   loadSessionState,
   saveSessionState,
 } from "./sessionStore";
+import {
+  createOfflineCompletionQueueItem,
+  getOfflineCompletionQueueStatus,
+  upsertOfflineCompletionQueueItem,
+} from "./offlineCompletionQueue";
 
 export { isProductionApi, getApiMode, LocalApiError };
 
@@ -55,6 +60,13 @@ export type ApiFacade = Omit<
 > & {
   /** Always clears local state; in production mode also clears tokens. */
   resetLocalBetaState(): Promise<void>;
+  /**
+   * Production: fetch this account's pairing link from the server and store
+   * it locally so route guards see changes made on the other person's
+   * device. Local mode keeps pairing on-device, so this is a no-op there.
+   * Never throws; when offline the last known state is kept.
+   */
+  syncPairing(): Promise<void>;
 };
 
 /**
@@ -89,6 +101,37 @@ async function persistAuthAccount(
   );
 }
 
+async function syncPairingForRole(role: UserAccount["role"]): Promise<void> {
+  try {
+    const result = await apiClient.getPairingStatus(role);
+    if (result.status !== 200 || !result.data) return;
+    const pairing = result.data.pairing ?? undefined;
+    const state = await loadSessionState();
+    const accountKey = role === "athlete" ? "athleteAccount" : "caregiverAccount";
+    const account = state[accountKey];
+    await saveSessionState({
+      ...state,
+      pairing,
+      ...(account ? { [accountKey]: { ...account, pairingStatus: pairing?.status ?? "unlinked" } } : {}),
+    });
+  } catch {
+    // Offline or server unavailable: keep the last known pairing state.
+  }
+}
+
+/**
+ * Stand-in response for a completion saved to the offline queue. The real
+ * streak and score arrive from the server once the queue syncs.
+ */
+function queuedCompletionResponse(request: SessionCompletionRequest): CompletionSyncResponse {
+  return {
+    completionId: `queued_${request.idempotencyKey}`,
+    streak: { currentStreakDays: 0, bestStreakDays: 0, isNewMilestone: false },
+    composure: { previousScore: 0, newScore: 0, delta: 0 },
+    weeklyProgress: { completedDays: 0, targetDays: 7, sevenDayPattern: [] },
+  };
+}
+
 export function getApiFacade(dependencies?: {
   role?: UserAccount["role"];
   localApi?: LocalBetaApi;
@@ -110,6 +153,7 @@ export function getApiFacade(dependencies?: {
         const result = await apiClient.register(request);
         if (result.status === 201 && result.data) {
           await persistAuthAccount(result.data);
+          await syncPairingForRole(result.data.user.role);
           return result.data;
         }
         throw new LocalApiError(
@@ -127,6 +171,7 @@ export function getApiFacade(dependencies?: {
         const result = await apiClient.signIn(request);
         if (result.status === 200 && result.data) {
           await persistAuthAccount(result.data);
+          await syncPairingForRole(result.data.user.role);
           return result.data;
         }
         throw new LocalApiError(
@@ -176,15 +221,13 @@ export function getApiFacade(dependencies?: {
     },
 
     async resetLocalBetaState(): Promise<void> {
+      // Clears local state plus every stored token and credential in both modes.
       await localApi.resetLocalBetaState();
-      if (isProductionApi()) {
-        await loadSessionState().then(async (state) => {
-          await saveSessionState({
-            ...state,
-            currentRole: undefined,
-          });
-        });
-      }
+    },
+
+    async syncPairing(): Promise<void> {
+      if (!isProductionApi() || !role) return;
+      await syncPairingForRole(role);
     },
 
     async createPairingCode(): Promise<PairingCodeResponse> {
@@ -206,7 +249,10 @@ export function getApiFacade(dependencies?: {
       if (isProductionApi()) {
         await assertSignedIn();
         const result = await apiClient.claimPairingCode(role!, request);
-        if (result.status === 200 && result.data) return result.data;
+        if (result.status === 200 && result.data) {
+          await syncPairingForRole(role!);
+          return result.data;
+        }
         throw new LocalApiError(
           result.error?.error ?? "Unable to claim pairing code.",
           result.status,
@@ -222,7 +268,10 @@ export function getApiFacade(dependencies?: {
       if (isProductionApi()) {
         await assertSignedIn();
         const result = await apiClient.approvePairing(role!, linkId, request);
-        if (result.status === 200 && result.data) return result.data;
+        if (result.status === 200 && result.data) {
+          await syncPairingForRole(role!);
+          return result.data;
+        }
         throw new LocalApiError(
           result.error?.error ?? "Unable to approve pairing.",
           result.status,
@@ -235,7 +284,10 @@ export function getApiFacade(dependencies?: {
       if (isProductionApi()) {
         await assertSignedIn();
         const result = await apiClient.revokePairing(role!, linkId);
-        if (result.status === 200 && result.data) return result.data;
+        if (result.status === 200 && result.data) {
+          await syncPairingForRole(role!);
+          return result.data;
+        }
         throw new LocalApiError(
           result.error?.error ?? "Unable to revoke pairing.",
           result.status,
@@ -283,8 +335,22 @@ export function getApiFacade(dependencies?: {
     ): Promise<CompletionSyncResponse> {
       if (isProductionApi()) {
         await assertSignedIn();
-        const result = await apiClient.completeSession(role!, sessionId, request);
-        if (result.status === 200 && result.data) return result.data;
+        let result;
+        try {
+          result = await apiClient.completeSession(role!, sessionId, request);
+        } catch (error) {
+          if (!(error instanceof NetworkError)) throw error;
+          result = null;
+        }
+        if (result && result.status === 200 && result.data) return result.data;
+        if (!result || result.status >= 500) {
+          // Offline or server trouble: keep the rep on the device and sync later.
+          const state = await loadSessionState();
+          await saveSessionState(
+            upsertOfflineCompletionQueueItem(state, createOfflineCompletionQueueItem(request, new Date())),
+          );
+          return queuedCompletionResponse(request);
+        }
         throw new LocalApiError(
           result.error?.error ?? "Unable to complete session.",
           result.status,
@@ -317,12 +383,8 @@ export function getApiFacade(dependencies?: {
     async getOfflineQueueStatus(): Promise<OfflineQueueStatus> {
       if (isProductionApi()) {
         await assertSignedIn();
-        const result = await apiClient.getOfflineQueueStatus(role!);
-        if (result.status === 200 && result.data) return result.data;
-        throw new LocalApiError(
-          result.error?.error ?? "Unable to load queue status.",
-          result.status,
-        );
+        // The queue lives on this device; the server has nothing pending.
+        return getOfflineCompletionQueueStatus(await loadSessionState());
       }
       return localApi.getOfflineQueueStatus();
     },
@@ -346,7 +408,10 @@ export function getApiFacade(dependencies?: {
       if (isProductionApi()) {
         await assertSignedIn();
         const result = await apiClient.revokeConsent(role!, linkId);
-        if (result.status === 200 && result.data) return result.data;
+        if (result.status === 200 && result.data) {
+          await syncPairingForRole(role!);
+          return result.data;
+        }
         throw new LocalApiError(
           result.error?.error ?? "Unable to revoke access.",
           result.status,

@@ -5,8 +5,15 @@ import {
   FearlessHeaderLogo,
 } from "../components/icons/CustomIcons";
 
+export interface OnboardingPlan {
+  position: string;
+  skills: string[];
+  goal: string;
+  matchday: string;
+}
+
 interface OnboardingScreenProps {
-  onContinue: (planData: any) => void;
+  onContinue: (plan: OnboardingPlan) => void;
 }
 
 const positions = [

@@ -1,10 +1,12 @@
+import { useState } from "react";
 import { useRouter } from "expo-router";
 import { Brand, Button, PageTitle, PrivacyNotice, Screen, StatusCard } from "../../src/ui";
 import { CaregiverAccountGuard, useSession } from "../../src/session";
 
 function CaregiverUnlinkedContent() {
   const router = useRouter();
-  const { state, signOut, switchRole } = useSession();
+  const { state, signOut, switchRole, syncPairing } = useSession();
+  const [checking, setChecking] = useState(false);
   const pairing = state?.pairing;
   const pending = pairing?.status === "pending_athlete_approval";
   const revoked = pairing?.status === "revoked";
@@ -49,6 +51,18 @@ function CaregiverUnlinkedContent() {
           accessibilityLabel="Open pairing code claim"
         />
       )}
+      <Button
+        label={checking ? "Checking…" : "Check again"}
+        variant="secondary"
+        disabled={checking}
+        onPress={async () => {
+          setChecking(true);
+          const next = await syncPairing().catch(() => null);
+          setChecking(false);
+          if (next?.pairing?.status === "active") router.replace("/caregiver/dashboard");
+        }}
+        accessibilityLabel="Check whether the athlete approved the link"
+      />
       <Button
         label="Back to caregiver account"
         variant="quiet"

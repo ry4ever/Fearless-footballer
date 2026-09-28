@@ -3,7 +3,7 @@ import tailwindcss from "@tailwindcss/vite";
 import react from "@vitejs/plugin-react";
 import fs from "node:fs";
 import path from "node:path";
-import { defineConfig, type Plugin, type ViteDevServer } from "vite";
+import { defineConfig, loadEnv, type Plugin, type ViteDevServer } from "vite";
 import { vitePluginManusRuntime } from "vite-plugin-manus-runtime";
 
 // =============================================================================
@@ -12,6 +12,9 @@ import { vitePluginManusRuntime } from "vite-plugin-manus-runtime";
 // =============================================================================
 
 const PROJECT_ROOT = import.meta.dirname;
+// The API server reads PORT from the same .env; proxy to wherever it listens.
+const rootEnv = loadEnv(process.env.NODE_ENV ?? "development", PROJECT_ROOT, "");
+const API_PROXY_TARGET = rootEnv.API_PROXY_TARGET || `http://127.0.0.1:${rootEnv.PORT || 3000}`;
 const LOG_DIR = path.join(PROJECT_ROOT, ".manus-logs");
 const MAX_LOG_SIZE_BYTES = 1 * 1024 * 1024; // 1MB per log file
 const TRIM_TARGET_BYTES = Math.floor(MAX_LOG_SIZE_BYTES * 0.6); // Trim to 60% to avoid constant re-trimming
@@ -221,8 +224,23 @@ export default defineConfig({
     emptyOutDir: true,
   },
   server: {
-    port: 3000,
-    strictPort: false, // Will find next available port if 3000 is busy
+    // 5173 leaves 3000 for the API server. API paths are proxied to it, so the
+    // browser talks to one origin in development just as it does on Vercel.
+    port: 5173,
+    strictPort: false,
+    proxy: Object.fromEntries(
+      ["/auth", "/sessions", "/caregiver", "/athlete", "/admin", "/feedback", "/health"].map((prefix) => [
+        prefix,
+        {
+          target: API_PROXY_TARGET,
+          changeOrigin: true,
+          // Through the proxy these are same-origin requests, as on Vercel, so
+          // don't trip the API's cross-origin check.
+          configure: (proxy: { on: (event: "proxyReq", cb: (req: { removeHeader: (name: string) => void }) => void) => void }) =>
+            proxy.on("proxyReq", (proxyReq) => proxyReq.removeHeader("origin")),
+        },
+      ]),
+    ),
     host: true,
     allowedHosts: [
       ".manuspre.computer",

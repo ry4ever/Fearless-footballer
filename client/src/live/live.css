@@ -1,0 +1,154 @@
+/* Styles for the API-backed screens. They reuse the prototype's tokens and
+   components (primary-button, eyebrow, metric-card, ...) from index.css. */
+
+.live-screen {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 24px 20px 110px;
+  color: var(--white);
+}
+.live-screen.no-nav { padding-bottom: 32px; }
+
+.live-header { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.live-title { margin: 4px 0 0; font-size: 26px; font-weight: 800; line-height: 1.15; }
+.live-copy { margin: 0; color: #b8c6de; font-size: 14px; line-height: 1.5; }
+
+.live-card {
+  padding: 16px;
+  border: 1px solid rgba(105, 224, 250, 0.22);
+  border-radius: 16px;
+  background: rgba(11, 22, 53, 0.78);
+}
+.live-card h2 { margin: 4px 0 6px; font-size: 17px; font-weight: 800; }
+
+.live-segment {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: 1fr;
+  gap: 4px;
+  padding: 4px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.06);
+}
+.live-segment button {
+  min-height: 40px;
+  border-radius: 9px;
+  color: #b8c6de;
+  background: transparent;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.live-segment button[aria-pressed="true"] { color: #041126; background: var(--cyan); }
+
+.live-form { display: flex; flex-direction: column; gap: 12px; }
+.live-field { display: flex; flex-direction: column; gap: 6px; font-size: 13px; font-weight: 600; color: #d6e2f5; }
+.live-field input,
+.live-field textarea {
+  min-height: 46px;
+  padding: 10px 12px;
+  border: 1px solid rgba(105, 224, 250, 0.3);
+  border-radius: 12px;
+  color: var(--white);
+  background: rgba(5, 10, 25, 0.7);
+  font-size: 16px; /* 16px stops iOS zooming on focus */
+  font-weight: 500;
+}
+.live-field textarea { min-height: 84px; resize: vertical; }
+.live-field input:focus-visible,
+.live-field textarea:focus-visible { outline: 2px solid var(--cyan); outline-offset: 1px; }
+.live-hint { font-size: 12px; font-weight: 500; color: #8fa3c7; }
+
+.live-check { display: flex; align-items: flex-start; gap: 10px; font-size: 13px; line-height: 1.45; color: #d6e2f5; }
+.live-check input { width: 20px; height: 20px; margin-top: 1px; accent-color: var(--cyan); flex-shrink: 0; }
+
+.live-error {
+  padding: 10px 12px;
+  border: 1px solid rgba(255, 124, 114, 0.5);
+  border-radius: 12px;
+  color: #ffd2cd;
+  background: rgba(255, 124, 114, 0.12);
+  font-size: 13px;
+  line-height: 1.4;
+}
+.live-note { font-size: 12px; line-height: 1.45; color: #8fa3c7; text-align: center; }
+
+.live-button-row { display: flex; flex-direction: column; gap: 10px; }
+.live-button-row .primary-button { width: 100%; }
+.primary-button:disabled { opacity: 0.55; cursor: not-allowed; transform: none; box-shadow: none; }
+
+.live-secondary-button,
+.live-danger-button,
+.live-link-button {
+  min-height: 46px;
+  padding: 0 16px;
+  border-radius: 14px;
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.live-secondary-button { color: var(--cyan); border: 1px solid rgba(105, 224, 250, 0.45); background: transparent; }
+.live-danger-button { color: #ffd2cd; border: 1px solid rgba(255, 124, 114, 0.55); background: rgba(255, 124, 114, 0.1); }
+.live-link-button { min-height: 36px; color: #8fa3c7; background: transparent; }
+.live-secondary-button:disabled,
+.live-danger-button:disabled { opacity: 0.5; cursor: not-allowed; }
+
+.pairing-code {
+  display: block;
+  margin: 8px 0;
+  font-size: 34px;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  color: var(--cyan);
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+
+.live-stat-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.live-stat {
+  padding: 14px;
+  border: 1px solid rgba(0, 139, 206, 0.55);
+  border-radius: 16px;
+  background: linear-gradient(135deg, rgba(15, 39, 82, 0.9), rgba(7, 18, 46, 0.86));
+}
+.live-stat strong { display: block; margin-top: 4px; font-size: 28px; font-weight: 800; font-variant-numeric: tabular-nums; }
+.live-stat small { color: #8fa3c7; font-size: 12px; }
+
+.week-dots { display: grid; grid-template-columns: repeat(7, 1fr); gap: 6px; margin-top: 10px; }
+.week-dots span {
+  height: 10px;
+  border-radius: 99px;
+  background: rgba(255, 255, 255, 0.1);
+}
+.week-dots span.done { background: var(--cyan); }
+
+.live-center { display: flex; flex: 1; flex-direction: column; align-items: center; justify-content: center; gap: 12px; min-height: 60vh; text-align: center; }
+.live-spinner {
+  width: 32px;
+  height: 32px;
+  border: 3px solid rgba(105, 224, 250, 0.25);
+  border-top-color: var(--cyan);
+  border-radius: 50%;
+  animation: live-spin 0.9s linear infinite;
+}
+@keyframes live-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .live-spinner { animation-duration: 3s; } }
+
+.live-choice-list { display: flex; flex-direction: column; gap: 8px; }
+.live-choice {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  min-height: 52px;
+  padding: 10px 14px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 12px;
+  color: var(--white);
+  background: rgba(255, 255, 255, 0.04);
+  text-align: left;
+  cursor: pointer;
+}
+.live-choice[aria-pressed="true"] { border-color: var(--cyan); background: rgba(105, 224, 250, 0.12); }
+.live-choice small { display: block; color: #8fa3c7; font-size: 12px; }

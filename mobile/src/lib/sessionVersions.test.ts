@@ -4,7 +4,6 @@ import { sampleSessionPackage } from "../../../shared/sampleSession";
 import {
   availableModes,
   hasMusicChoice,
-  lengthLabel,
   pickVariant,
   progressKey,
   variantFromParams,
@@ -51,10 +50,5 @@ describe("session versions", () => {
     expect(back).toEqual(chosen);
     expect(variantFromParams(session, {})?.mode).toBe("interactive");
     expect(variantFromParams(sampleSessionPackage, { mode: "relaxation" })).toBeNull();
-  });
-
-  it("describes the length range across recordings", () => {
-    expect(lengthLabel(session)).toBe("7–10 min");
-    expect(lengthLabel(sampleSessionPackage)).toBe("5 min");
   });
 });

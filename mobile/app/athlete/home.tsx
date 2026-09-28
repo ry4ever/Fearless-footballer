@@ -93,7 +93,8 @@ function AthleteHomeContent() {
     const key = item.focusArea ?? "Sessions";
     groups.set(key, [...(groups.get(key) ?? []), item]);
   }
-  const openSession = (item: SessionPackage) => router.push(`/library/${item.id}`);
+  // A session opens straight into the player; the version is chosen there.
+  const openSession = (item: SessionPackage) => router.push(`/session/${item.id}`);
 
   return (
     <Screen testID="athlete-home-screen">
@@ -104,11 +105,6 @@ function AthleteHomeContent() {
         copy="See it. Rehearse it. Become it. Technical, tactical, and mental development."
       />
       <View style={styles.stateRow}>
-        <StatusCard tone="info" title="Training score">
-          {currentProgress
-            ? `${currentProgress.score} · ${currentProgress.deltaWeekly >= 0 ? "+" : ""}${currentProgress.deltaWeekly} this week`
-            : "Build your consistency."}
-        </StatusCard>
         <StatusCard tone="info" title="Current streak">
           {currentProgress
             ? `${currentProgress.currentStreakDays} day${currentProgress.currentStreakDays === 1 ? "" : "s"} · Best ${currentProgress.bestStreakDays}`

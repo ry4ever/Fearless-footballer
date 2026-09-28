@@ -13,6 +13,7 @@ import type {
   PlaybackEventRequest,
   RegisterAccountRequest,
   SessionCompletionRequest,
+  SessionLibraryResponse,
   SessionRetrieveResponse,
   UserAccount,
 } from "@shared/types";
@@ -241,6 +242,11 @@ class ApiClient {
   public async getTodaySession() {
     const data = await this.request<SessionRetrieveResponse>("/sessions/today");
     return data.session;
+  }
+
+  /** Every playable and coming-soon session, plus programmes. */
+  public getLibrary(): Promise<SessionLibraryResponse> {
+    return this.request<SessionLibraryResponse>("/sessions");
   }
 
   /** Analytics only: failures are ignored so they never interrupt playback. */

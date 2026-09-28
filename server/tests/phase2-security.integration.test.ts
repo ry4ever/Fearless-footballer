@@ -538,6 +538,9 @@ describe.skipIf(!process.env.DATABASE_URL)("Phase 2 Security Integration Tests",
 
       const progress = await (await fetch(`${baseUrl}/athlete/progress`, { headers: { Authorization: `Bearer ${token}` } })).json();
       expect(progress.lastRep.title).toBe("Library Playable");
+
+      // Programmes aren't removed with their sessions; don't leave this one behind.
+      await prisma.programme.delete({ where: { slug: `library-programme-${stamp}` } });
     },
     { timeout: 120000 }
   );

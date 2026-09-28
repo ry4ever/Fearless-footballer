@@ -1,5 +1,5 @@
 import { useState } from "react";
-import type { SessionPackage } from "@shared/types";
+import type { SessionAudioVariant, SessionPackage } from "@shared/types";
 import { BottomNavBar, type NavTab } from "../components/BottomNavBar";
 import { OnboardingScreen } from "../screens/OnboardingScreen";
 import { AthleteLinkScreen } from "./AthleteLinkScreen";
@@ -10,6 +10,7 @@ import { LiveHQScreen } from "./LiveHQScreen";
 import { LiveParentDashboard } from "./LiveParentDashboard";
 import { LivePlayerScreen, type CompletionOutcome } from "./LivePlayerScreen";
 import { LiveProfileScreen } from "./LiveProfileScreen";
+import { LiveSessionDetail } from "./LiveSessionDetail";
 import { loadPlan, savePlan } from "./plan";
 import { isLinkActive, SessionProvider, useSession } from "./session";
 import "./live.css";
@@ -20,7 +21,8 @@ const ATHLETE_TABS: NavTab[] = ["hq", "profile"];
 type AthleteView =
   | { name: "main"; tab: NavTab }
   | { name: "onboarding" }
-  | { name: "player"; session: SessionPackage }
+  | { name: "detail"; session: SessionPackage }
+  | { name: "player"; session: SessionPackage; variant: SessionAudioVariant | null }
   | { name: "complete"; outcome: CompletionOutcome };
 
 function Loading() {
@@ -52,11 +54,20 @@ function AthleteApp() {
           }}
         />
       );
+    case "detail":
+      return (
+        <LiveSessionDetail
+          session={view.session}
+          onBack={toHQ}
+          onStart={(session, variant) => setView({ name: "player", session, variant })}
+        />
+      );
     case "player":
       return (
         <LivePlayerScreen
           session={view.session}
-          onBack={toHQ}
+          variant={view.variant}
+          onBack={() => setView({ name: "detail", session: view.session })}
           onComplete={(outcome) => setView({ name: "complete", outcome })}
         />
       );
@@ -68,7 +79,7 @@ function AthleteApp() {
           {view.tab === "profile" ? (
             <LiveProfileScreen onEditPlan={() => setView({ name: "onboarding" })} />
           ) : (
-            <LiveHQScreen onStartSession={(session) => setView({ name: "player", session })} />
+            <LiveHQScreen onOpenSession={(session) => setView({ name: "detail", session })} />
           )}
           <BottomNavBar activeTab={view.tab} tabs={ATHLETE_TABS} onSelectTab={(tab) => setView({ name: "main", tab })} />
         </>

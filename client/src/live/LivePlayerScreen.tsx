@@ -4,7 +4,9 @@ import type {
   CompletionSyncResponse,
   PlaybackEventRequest,
   ReflectionFeeling,
+  SessionAudioVariant,
   SessionCompletionRequest,
+  SessionMode,
   SessionPackage,
 } from "@shared/types";
 import { audioEngine } from "../audio/audioEngine";
@@ -18,6 +20,8 @@ export type CompletionOutcome =
 
 interface LivePlayerScreenProps {
   session: SessionPackage;
+  /** The chosen recording; null for older single-file sessions. */
+  variant: SessionAudioVariant | null;
   onBack: () => void;
   onComplete: (outcome: CompletionOutcome) => void;
 }
@@ -26,6 +30,19 @@ interface LivePlayerScreenProps {
 const REQUIRED_RATIO = 0.8;
 /** How long to wait for the voice track before falling back to guided prompts. */
 const AUDIO_LOAD_TIMEOUT_MS = 8000;
+
+const MODE_LABEL: Record<SessionMode, string> = {
+  interactive: "Interactive",
+  guidance: "Full Guidance",
+  relaxation: "Relaxation",
+};
+
+/** Shown while playing when a session has no timed prompts. */
+const GUIDANCE: Record<SessionMode, string> = {
+  interactive: "Stay with Mark's voice. When he hands over, run your own passages of play — he'll bring you back in.",
+  guidance: "Stay with Mark's voice and let the pictures come. He's with you the whole way through.",
+  relaxation: "Settle in and let Mark take you through it. Nothing to do but follow along.",
+};
 
 const FEELINGS: Array<{ id: ReflectionFeeling; label: string; desc: string }> = [
   { id: "more_ready", label: "More ready", desc: "Instincts primed for match speed" },
@@ -46,16 +63,22 @@ function newIdempotencyKey(sessionId: string) {
   return `web_${sessionId}_${random}`;
 }
 
-export function LivePlayerScreen({ session, onBack, onComplete }: LivePlayerScreenProps) {
+export function LivePlayerScreen({ session, variant, onBack, onComplete }: LivePlayerScreenProps) {
   const { user } = useSession();
-  const duration = session.defaultDurationSeconds;
+  // Each recording has its own length; the 80% rule is measured against it.
+  const duration = variant?.durationSeconds ?? session.defaultDurationSeconds;
+  const mode: SessionMode = variant?.mode ?? "interactive";
+  const voiceUrl = variant?.url ?? session.media.voiceUrl;
+  // Recorded versions have music mixed in, so there's no separate music bed.
+  const musicBedUrl = variant ? undefined : session.media.musicBedUrl;
   const requiredSeconds = Math.ceil(duration * REQUIRED_RATIO);
 
   const [audioState, setAudioState] = useState<"loading" | "ready" | "unavailable">("loading");
   const [playing, setPlaying] = useState(false);
   const [position, setPosition] = useState(0);
   const [listened, setListened] = useState(0);
-  const [music, setMusic] = useState(true);
+  const [musicSetting, setMusic] = useState(true);
+  const music = variant ? variant.withMusic : musicSetting;
   const [showReflection, setShowReflection] = useState(false);
   const [feeling, setFeeling] = useState<ReflectionFeeling | null>(null);
   const [note, setNote] = useState("");
@@ -85,13 +108,13 @@ export function LivePlayerScreen({ session, onBack, onComplete }: LivePlayerScre
     (eventType: PlaybackEventRequest["eventType"], at: number) => {
       apiClient.recordPlaybackEvent(session.id, {
         eventType,
-        mode: "interactive",
+        mode,
         musicEnabled: music,
         playbackPositionSeconds: Math.round(at),
         clientTimestamp: new Date().toISOString(),
       });
     },
-    [music, session.id],
+    [mode, music, session.id],
   );
 
   const finish = useCallback(() => {
@@ -110,10 +133,10 @@ export function LivePlayerScreen({ session, onBack, onComplete }: LivePlayerScre
     const onError = () => setAudioState("unavailable");
     voice.addEventListener("canplay", onReady, { once: true });
     voice.addEventListener("error", onError, { once: true });
-    voice.src = session.media.voiceUrl;
+    voice.src = voiceUrl;
 
-    if (session.media.musicBedUrl) {
-      const bed = new Audio(session.media.musicBedUrl);
+    if (musicBedUrl) {
+      const bed = new Audio(musicBedUrl);
       bed.loop = true;
       bed.volume = 0.35;
       musicRef.current = bed;
@@ -128,7 +151,7 @@ export function LivePlayerScreen({ session, onBack, onComplete }: LivePlayerScre
       voiceRef.current = null;
       audioEngine.pausePlayback();
     };
-  }, [session.media.voiceUrl, session.media.musicBedUrl]);
+  }, [voiceUrl, musicBedUrl]);
 
   // Real audio: follow the element's clock. Only small forward steps count as
   // listening, so seeking ahead doesn't earn completion time.
@@ -176,13 +199,16 @@ export function LivePlayerScreen({ session, onBack, onComplete }: LivePlayerScre
     if (bed && audioState === "ready") {
       if (musicOn) bed.play().catch(() => undefined);
       else bed.pause();
+    } else if (variant && audioState === "ready") {
+      // The recording carries its own music.
+      audioEngine.pausePlayback();
     } else {
       // Synthesised ambience when there's no music track (or no audio at all).
       audioEngine.setMusicEnabled(music);
       if (musicOn) audioEngine.startPlayback();
       else audioEngine.pausePlayback();
     }
-  }, [playing, music, audioState]);
+  }, [playing, music, audioState, variant]);
 
   // Lock-screen and media-key controls go through React state, like the buttons.
   useEffect(() => {
@@ -237,7 +263,8 @@ export function LivePlayerScreen({ session, onBack, onComplete }: LivePlayerScre
     const request: SessionCompletionRequest = {
       sessionId: session.id,
       sessionVersion: session.version,
-      mode: "interactive",
+      mode,
+      ...(variant ? { withMusic: variant.withMusic } : {}),
       completionDurationSeconds: Math.min(Math.round(listened), duration),
       completedAt: new Date().toISOString(),
       ...(feeling ? { reflection: { feeling, ...(note.trim() ? { note: note.trim() } : {}) } } : {}),
@@ -279,15 +306,24 @@ export function LivePlayerScreen({ session, onBack, onComplete }: LivePlayerScre
           <span className="brand-cut">A</span>
           <span>LESS</span>
         </div>
-        <button
-          type="button"
-          className="icon-button"
-          onClick={() => setMusic((value) => !value)}
-          aria-pressed={music}
-          style={{ width: "auto", minHeight: 36, background: "rgba(255,255,255,0.08)", border: "none", color: "#00F0FF", padding: "6px 12px", borderRadius: 100, fontSize: "0.75rem", fontWeight: 700, whiteSpace: "nowrap" }}
-        >
-          Music {music ? "on" : "off"}
-        </button>
+        {variant ? (
+          <span
+            style={{ minWidth: 42, padding: "6px 10px", borderRadius: 100, background: "rgba(255,255,255,0.08)", color: "#00F0FF", fontSize: "0.7rem", fontWeight: 700, whiteSpace: "nowrap" }}
+          >
+            {MODE_LABEL[variant.mode]}
+            {variant.withMusic ? "" : " · no music"}
+          </span>
+        ) : (
+          <button
+            type="button"
+            className="icon-button"
+            onClick={() => setMusic((value) => !value)}
+            aria-pressed={music}
+            style={{ width: "auto", minHeight: 36, background: "rgba(255,255,255,0.08)", border: "none", color: "#00F0FF", padding: "6px 12px", borderRadius: 100, fontSize: "0.75rem", fontWeight: 700, whiteSpace: "nowrap" }}
+          >
+            Music {music ? "on" : "off"}
+          </button>
+        )}
       </header>
 
       <main className="player-body">
@@ -355,7 +391,7 @@ export function LivePlayerScreen({ session, onBack, onComplete }: LivePlayerScre
 
         <div className="contextual-prompt-box" aria-live="polite">
           <p className="prompt-body-text" style={{ fontSize: "0.95rem", lineHeight: 1.4 }}>
-            {prompt ? prompt.promptText : "Find a quiet spot, put your headphones on, and press play when you're ready."}
+            {prompt ? prompt.promptText : position > 0 || playing ? GUIDANCE[mode] : "Find a quiet spot, put your headphones on, and press play when you're ready."}
           </p>
           {prompt?.subText && <p className="live-note">{prompt.subText}</p>}
         </div>

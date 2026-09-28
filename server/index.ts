@@ -1197,7 +1197,9 @@ async function getSessionLibraryHandler(req: Request, res: Response) {
 
   const body: SessionLibraryResponse = {
     sessions: sessions.map(toSessionPackage),
-    programmes: programmes.map((programme) => ({
+    programmes: programmes
+      .filter((programme) => programme.sessions.length > 0)
+      .map((programme) => ({
       slug: programme.slug,
       title: programme.title,
       description: programme.description,

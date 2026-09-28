@@ -198,7 +198,22 @@ async function resolveAccessToken(role: BetaUserRole): Promise<string | null> {
   return null;
 }
 
-async function refreshTokens(role: BetaUserRole, refreshToken: string): Promise<AuthTokenSet | null> {
+// The server rotates refresh tokens on every use, so concurrent 401s must share
+// one refresh call. Otherwise the losers present an already-rotated token, get
+// a 401, and clear the fresh tokens the winner just saved.
+const inFlightRefreshes = new Map<string, Promise<AuthTokenSet | null>>();
+
+function refreshTokens(role: BetaUserRole, refreshToken: string): Promise<AuthTokenSet | null> {
+  const existing = inFlightRefreshes.get(refreshToken);
+  if (existing) return existing;
+  const pending = performRefresh(role, refreshToken).finally(() => {
+    inFlightRefreshes.delete(refreshToken);
+  });
+  inFlightRefreshes.set(refreshToken, pending);
+  return pending;
+}
+
+async function performRefresh(role: BetaUserRole, refreshToken: string): Promise<AuthTokenSet | null> {
   try {
     const result = await request<AuthTokenSet>(
       "POST",
@@ -210,8 +225,12 @@ async function refreshTokens(role: BetaUserRole, refreshToken: string): Promise<
       await saveTokens(role, result.data);
       return result.data;
     }
-    // Refresh failed — clear stale tokens so the session provider can redirect.
-    await clearTokens(role);
+    // Refresh failed. Only clear tokens if they haven't been replaced meanwhile
+    // (e.g. by a sign-in or another refresh that completed first).
+    const { refresh: current } = await getTokens(role);
+    if (current === refreshToken) {
+      await clearTokens(role);
+    }
     return null;
   } catch {
     return null;

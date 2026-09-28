@@ -5,6 +5,21 @@ import { z } from "zod";
 
 const app = express();
 
+// Behind Railway/Render/Vercel every request arrives from the platform proxy.
+// Without trusting it, req.ip is the proxy's address and all users share one
+// rate-limit bucket. TRUST_PROXY accepts a hop count, "true"/"false", or an
+// Express trust-proxy string (e.g. "loopback, 10.0.0.0/8").
+function resolveTrustProxy(): boolean | number | string {
+  const raw = process.env.TRUST_PROXY?.trim();
+  if (!raw) return process.env.NODE_ENV === "production" ? 1 : false;
+  if (raw === "true") return true;
+  if (raw === "false") return false;
+  const hops = Number(raw);
+  return Number.isInteger(hops) && hops >= 0 ? hops : raw;
+}
+
+app.set("trust proxy", resolveTrustProxy());
+
 const passwordSchema = z
   .string()
   .min(8, "Password must be at least 8 characters")
@@ -93,7 +108,7 @@ app.use((req: Request, res: Response, next: NextFunction) => {
   if (isAllowedOrigin(origin)) {
     res.header("Access-Control-Allow-Origin", origin && origin !== "null" ? origin : corsOrigin);
     res.header("Access-Control-Allow-Headers", "Authorization, Content-Type, Idempotency-Key");
-    res.header("Access-Control-Allow-Methods", "GET,POST,DELETE,OPTIONS");
+    res.header("Access-Control-Allow-Methods", "GET,POST,PATCH,DELETE,OPTIONS");
     res.header("Vary", "Origin");
   }
 

@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import type { SessionMode } from "@shared/types";
 import { BottomNavBar, type NavTab } from "../components/BottomNavBar";
-import { OnboardingScreen } from "../screens/OnboardingScreen";
+import { OnboardingScreen, type OnboardingPlan } from "../screens/OnboardingScreen";
 import { HQScreen } from "../screens/HQScreen";
 import { SetupScreen } from "../screens/SetupScreen";
 import { PlayerScreen } from "../screens/PlayerScreen";
@@ -72,8 +72,8 @@ export default function Home() {
     window.location.hash = "main";
   };
 
-  const handleOnboardingContinue = (mindset: string) => {
-    triggerToast(`7-day blueprint configured for "${mindset.toUpperCase()}" mindset!`);
+  const handleOnboardingContinue = (plan: OnboardingPlan) => {
+    triggerToast(`7-day blueprint configured for "${plan.goal}"!`);
     setFlowState("main");
     setActiveTab("hq");
     window.location.hash = "main";

@@ -129,7 +129,7 @@ const completionSchema = z.object({
 
 interface AuthContext {
   userId: string;
-  role: BetaUserRole;
+  role: BetaUserRole | "mentor_admin";
 }
 
 declare global {
@@ -140,7 +140,7 @@ declare global {
   }
 }
 
-export function createAccessToken(userId: string, role: BetaUserRole): string {
+export function createAccessToken(userId: string, role: AuthContext["role"]): string {
   return jwt.sign(
     { sub: userId, role },
     JWT_ACCESS_SECRET,
@@ -182,14 +182,20 @@ async function authenticate(req: Request, res: Response, next: NextFunction) {
       where: { id: payload.sub },
       select: { role: true },
     });
-    if (!user || (user.role !== "ATHLETE" && user.role !== "CAREGIVER")) {
+    if (!user) {
       res.status(401).json({ error: "Invalid or expired token" });
       return;
     }
 
+    // The role always comes from the database, never from the token claim.
     req.auth = {
       userId: payload.sub,
-      role: user.role === "CAREGIVER" ? "caregiver" : "athlete",
+      role:
+        user.role === "MENTOR_ADMIN"
+          ? "mentor_admin"
+          : user.role === "CAREGIVER"
+            ? "caregiver"
+            : "athlete",
     };
     next();
   } catch {
@@ -197,7 +203,7 @@ async function authenticate(req: Request, res: Response, next: NextFunction) {
   }
 }
 
-function requireRole(role: BetaUserRole) {
+function requireRole(role: AuthContext["role"]) {
   return (req: Request, res: Response, next: NextFunction) => {
     if (!req.auth) {
       res.status(401).json({ error: "Authentication required" });
@@ -1106,6 +1112,10 @@ async function completeSessionHandler(req: Request, res: Response) {
 
   const existing = await prisma.sessionCompleted.findUnique({ where: { idempotencyKey } });
   if (existing) {
+    if (existing.userId !== req.auth.userId) {
+      res.status(409).json({ error: "This idempotency key has already been used" });
+      return;
+    }
     res.json({ completionId: existing.id });
     return;
   }
@@ -1155,55 +1165,68 @@ async function completeSessionHandler(req: Request, res: Response) {
     return;
   }
 
-  const completion = await prisma.$transaction(async (tx: any) => {
-    const created = await tx.sessionCompleted.create({
-      data: {
-        userId: req.auth!.userId,
-        sessionId: session.id,
-        mode: "INTERACTIVE",
-        durationSeconds: request.completionDurationSeconds,
-        completedAt: new Date(request.completedAt),
-        idempotencyKey,
-        reflection: request.reflection
-          ? {
-              create: {
-                feeling:
-                  request.reflection.feeling === "clearer"
-                    ? "CLEARER"
-                    : request.reflection.feeling === "steadier"
-                      ? "STEADIER"
-                      : "MORE_READY",
-                athleteNote: request.reflection.note ?? undefined,
-              },
-            }
-          : undefined,
-      },
-    });
+  let completion: { id: string };
+  try {
+    completion = await prisma.$transaction(async (tx: any) => {
+      const created = await tx.sessionCompleted.create({
+        data: {
+          userId: req.auth!.userId,
+          sessionId: session.id,
+          mode: "INTERACTIVE",
+          durationSeconds: request.completionDurationSeconds,
+          completedAt: new Date(request.completedAt),
+          idempotencyKey,
+          reflection: request.reflection
+            ? {
+                create: {
+                  feeling:
+                    request.reflection.feeling === "clearer"
+                      ? "CLEARER"
+                      : request.reflection.feeling === "steadier"
+                        ? "STEADIER"
+                        : "MORE_READY",
+                  athleteNote: request.reflection.note ?? undefined,
+                },
+              }
+            : undefined,
+        },
+      });
 
-    await tx.athleteProfile.update({
-      where: { id: athlete.id },
-      data: {
-        composureScore: metrics.newScore,
-        currentStreak: metrics.currentStreak,
-        bestStreak: metrics.bestStreak,
-        lastSessionAt: new Date(request.completedAt),
-      },
-    });
+      await tx.athleteProfile.update({
+        where: { id: athlete.id },
+        data: {
+          composureScore: metrics.newScore,
+          currentStreak: metrics.currentStreak,
+          bestStreak: metrics.bestStreak,
+          lastSessionAt: new Date(request.completedAt),
+        },
+      });
 
-    await tx.metricSnapshot.create({
-      data: {
-        athleteProfileId: athlete.id,
-        weekStartDate: metrics.weeklyCompletions[0]?.completedAt ?? now,
-        composureScore: metrics.newScore,
-        composureDelta: metrics.delta,
-        repsCompleted: metrics.completedDays,
-        streakDays: metrics.currentStreak,
-        inferredMoodTrend: metrics.delta > 0 ? "Improving" : "Steady",
-      },
-    });
+      await tx.metricSnapshot.create({
+        data: {
+          athleteProfileId: athlete.id,
+          weekStartDate: metrics.weeklyCompletions[0]?.completedAt ?? now,
+          composureScore: metrics.newScore,
+          composureDelta: metrics.delta,
+          repsCompleted: metrics.completedDays,
+          streakDays: metrics.currentStreak,
+          inferredMoodTrend: metrics.delta > 0 ? "Improving" : "Steady",
+        },
+      });
 
-    return created;
-  });
+      return created;
+    });
+  } catch (error) {
+    // A concurrent retry with the same idempotency key won the insert race.
+    if (prismaErrorStatus(error) === 409) {
+      const winner = await prisma.sessionCompleted.findUnique({ where: { idempotencyKey } });
+      if (winner && winner.userId === req.auth.userId) {
+        res.json({ completionId: winner.id });
+        return;
+      }
+    }
+    throw error;
+  }
 
   const streak = {
     currentStreakDays: metrics.currentStreak,
@@ -1689,8 +1712,7 @@ async function adminCreateSessionHandler(req: Request, res: Response) {
     res.status(401).json({ error: "Authentication required" });
     return;
   }
-  const user = await prisma.user.findUnique({ where: { id: req.auth.userId } });
-  if (!user || (user.role !== "MENTOR_ADMIN" && user.role !== "CAREGIVER")) {
+  if (req.auth.role !== "mentor_admin") {
     res.status(403).json({ error: "Admin role required" });
     return;
   }
@@ -1726,8 +1748,7 @@ async function adminPublishSessionHandler(req: Request, res: Response) {
     res.status(401).json({ error: "Authentication required" });
     return;
   }
-  const user = await prisma.user.findUnique({ where: { id: req.auth.userId } });
-  if (!user || (user.role !== "MENTOR_ADMIN" && user.role !== "CAREGIVER")) {
+  if (req.auth.role !== "mentor_admin") {
     res.status(403).json({ error: "Admin role required" });
     return;
   }
@@ -1746,8 +1767,7 @@ async function adminListSessionsHandler(req: Request, res: Response) {
     res.status(401).json({ error: "Authentication required" });
     return;
   }
-  const user = await prisma.user.findUnique({ where: { id: req.auth.userId } });
-  if (!user || (user.role !== "MENTOR_ADMIN" && user.role !== "CAREGIVER")) {
+  if (req.auth.role !== "mentor_admin") {
     res.status(403).json({ error: "Admin role required" });
     return;
   }
@@ -1814,9 +1834,8 @@ async function getBetaDashboardHandler(req: Request, res: Response) {
     res.status(401).json({ error: "Authentication required" });
     return;
   }
-  const user = await prisma.user.findUnique({ where: { id: req.auth.userId } });
-  if (!user || (user.role !== "MENTOR_ADMIN" && user.role !== "CAREGIVER")) {
-    res.status(403).json({ error: "Admin or Caregiver role required" });
+  if (req.auth.role !== "mentor_admin") {
+    res.status(403).json({ error: "Admin role required" });
     return;
   }
 
@@ -1858,69 +1877,99 @@ async function getBetaDashboardHandler(req: Request, res: Response) {
 // Express app setup
 // =============================================================================
 
+// Express 4 does not forward rejected promises from async handlers. Without
+// this wrapper any database error becomes an unhandled rejection, which
+// terminates the Node process and takes the whole API down.
+function wrap(
+  handler: (req: Request, res: Response, next: NextFunction) => Promise<unknown> | unknown,
+) {
+  return (req: Request, res: Response, next: NextFunction) => {
+    Promise.resolve(handler(req, res, next)).catch(next);
+  };
+}
+
+function prismaErrorStatus(error: unknown): number | undefined {
+  const code = (error as { code?: unknown } | null)?.code;
+  if (code === "P2025") return 404; // record not found
+  if (code === "P2002") return 409; // unique constraint violation
+  return undefined;
+}
+
 const app = express();
+app.set("trust proxy", securityApp.get("trust proxy"));
 
 // Security middleware: helmet, CORS, rate limiting, payload guards
 app.use(securityApp);
 
 // Health check probes for Load Balancer & Kubernetes container orchestration
-app.get("/health", async (_req: Request, res: Response) => {
+app.get("/health", wrap(async (_req: Request, res: Response) => {
   const health = await monitoring.getReadiness(prisma);
   res.status(health.status === "ok" ? 200 : 503).json(health);
-});
+}));
 app.get("/health/liveness", (_req: Request, res: Response) => {
   res.json(monitoring.getLiveness());
 });
-app.get("/health/readiness", async (_req: Request, res: Response) => {
+app.get("/health/readiness", wrap(async (_req: Request, res: Response) => {
   const health = await monitoring.getReadiness(prisma);
   res.status(health.status === "ok" ? 200 : 503).json(health);
-});
+}));
 
 // API routes
-app.post("/auth/register", registerAccountHandler);
-app.post("/auth/sign-in", authLimiter, signInAccountHandler);
-app.post("/auth/refresh", refreshTokenHandler);
-app.post("/auth/password/reset-request", authLimiter, passwordResetRequestHandler);
-app.post("/auth/password/reset", authLimiter, passwordResetConfirmHandler);
-app.delete("/auth/account", authenticate, deleteAccountHandler);
-app.post("/auth/age-gate", ageGateHandler);
-app.post("/auth/pairing/code", authenticate, requireRole("athlete"), createPairingCodeHandler);
-app.post("/auth/pairing/claim", authenticate, requireRole("caregiver"), claimPairingCodeHandler);
-app.post("/auth/pairing/:linkId/approve", authenticate, requireRole("athlete"), approvePairingHandler);
-app.delete("/auth/pairing/:linkId", authenticate, requireRole("athlete"), revokePairingHandler);
-app.delete("/auth/consent/:linkId", authenticate, revokeConsentHandler);
-app.get("/sessions/today", authenticate, requireRole("athlete"), getAthleteSessionHandler);
-app.get("/sessions/:sessionId/stream-url", authenticate, getSessionStreamUrlHandler);
-app.post("/sessions/:sessionId/events", authenticate, requireRole("athlete"), recordPlaybackEventHandler);
-app.post("/sessions/:sessionId/complete", authenticate, requireRole("athlete"), completeSessionHandler);
-app.post("/admin/sessions", authenticate, adminCreateSessionHandler);
-app.patch("/admin/sessions/:sessionId/publish", authenticate, adminPublishSessionHandler);
-app.get("/admin/sessions", authenticate, adminListSessionsHandler);
-app.post("/feedback", authenticate, submitFeedbackHandler);
-app.get("/admin/beta-dashboard", authenticate, getBetaDashboardHandler);
+app.post("/auth/register", wrap(registerAccountHandler));
+app.post("/auth/sign-in", authLimiter, wrap(signInAccountHandler));
+app.post("/auth/refresh", wrap(refreshTokenHandler));
+app.post("/auth/password/reset-request", authLimiter, wrap(passwordResetRequestHandler));
+app.post("/auth/password/reset", authLimiter, wrap(passwordResetConfirmHandler));
+app.delete("/auth/account", wrap(authenticate), wrap(deleteAccountHandler));
+app.post("/auth/age-gate", wrap(ageGateHandler));
+app.post("/auth/pairing/code", wrap(authenticate), requireRole("athlete"), wrap(createPairingCodeHandler));
+app.post("/auth/pairing/claim", wrap(authenticate), requireRole("caregiver"), wrap(claimPairingCodeHandler));
+app.post("/auth/pairing/:linkId/approve", wrap(authenticate), requireRole("athlete"), wrap(approvePairingHandler));
+app.delete("/auth/pairing/:linkId", wrap(authenticate), requireRole("athlete"), wrap(revokePairingHandler));
+app.delete("/auth/consent/:linkId", wrap(authenticate), wrap(revokeConsentHandler));
+app.get("/sessions/today", wrap(authenticate), requireRole("athlete"), wrap(getAthleteSessionHandler));
+app.get("/sessions/:sessionId/stream-url", wrap(authenticate), wrap(getSessionStreamUrlHandler));
+app.post("/sessions/:sessionId/events", wrap(authenticate), requireRole("athlete"), wrap(recordPlaybackEventHandler));
+app.post("/sessions/:sessionId/complete", wrap(authenticate), requireRole("athlete"), wrap(completeSessionHandler));
+app.post("/admin/sessions", wrap(authenticate), requireRole("mentor_admin"), wrap(adminCreateSessionHandler));
+app.patch("/admin/sessions/:sessionId/publish", wrap(authenticate), requireRole("mentor_admin"), wrap(adminPublishSessionHandler));
+app.get("/admin/sessions", wrap(authenticate), requireRole("mentor_admin"), wrap(adminListSessionsHandler));
+app.post("/feedback", wrap(authenticate), wrap(submitFeedbackHandler));
+app.get("/admin/beta-dashboard", wrap(authenticate), requireRole("mentor_admin"), wrap(getBetaDashboardHandler));
 app.get(
   "/caregiver/athletes/:athleteId/dashboard",
-  authenticate,
+  wrap(authenticate),
   requireRole("caregiver"),
-  getCaregiverDashboardHandler,
+  wrap(getCaregiverDashboardHandler),
 );
-app.get("/athlete/progress", authenticate, requireRole("athlete"), getAthleteProgressHandler);
-app.get("/athlete/queue-status", authenticate, requireRole("athlete"), getOfflineQueueStatusHandler);
-app.patch("/athlete/profile", authenticate, requireRole("athlete"), updateAthleteProfileHandler);
+app.get("/athlete/progress", wrap(authenticate), requireRole("athlete"), wrap(getAthleteProgressHandler));
+app.get("/athlete/queue-status", wrap(authenticate), requireRole("athlete"), wrap(getOfflineQueueStatusHandler));
+app.patch("/athlete/profile", wrap(authenticate), requireRole("athlete"), wrap(updateAthleteProfileHandler));
 
 // Error handling
 app.use((error: Error & { status?: number }, req: Request, res: Response, _next: NextFunction) => {
-  const status = error.status ?? 500;
-  if (status >= 500) {
+  const prismaStatus = prismaErrorStatus(error);
+  const status = prismaStatus ?? error.status ?? 500;
+  if (status >= 500 || res.headersSent) {
     console.error("Unexpected server error", {
       method: req.method,
       path: req.path,
       requestId: req.header("x-request-id") ?? "unknown",
+      message: error.message,
     });
   }
-  res.status(status).json({
-    error: status >= 500 ? "Internal server error" : error.message || "Request failed",
-  });
+  // Some handlers write an audit log after responding; a failure there must
+  // not attempt a second response.
+  if (res.headersSent) return;
+  const message =
+    prismaStatus === 404
+      ? "Not found"
+      : prismaStatus === 409
+        ? "This conflicts with an existing record"
+        : status >= 500
+          ? "Internal server error"
+          : error.message || "Request failed";
+  res.status(status).json({ error: message });
 });
 
 export { app, server };

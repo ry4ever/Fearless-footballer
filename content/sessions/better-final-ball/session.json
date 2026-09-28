@@ -1,0 +1,28 @@
+{
+  "slug": "better-final-ball",
+  "title": "Better Final Ball",
+  "category": "Sharpen Your Game",
+  "mentor": {
+    "name": "Mark Bowden",
+    "title": "Football Mentor"
+  },
+  "status": "ready",
+  "audio": {
+    "interactive": {
+      "music": "Final Ball interactive with music .mp3",
+      "noMusic": "Final Ball interactive without music .mp3"
+    },
+    "guidance": {
+      "music": "full guidance with music.mp3",
+      "noMusic": "full guidance without music.mp3"
+    },
+    "relaxation": {
+      "music": "Final Ball Relaxation with music.mp3",
+      "noMusic": "final ball relaxation without music.mp3"
+    }
+  },
+  "hasDescription": true,
+  "sortOrder": 1,
+  "descriptionStatus": "final",
+  "audioSourceFolder": "Better Final Ball"
+}

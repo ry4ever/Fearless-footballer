@@ -1,0 +1,28 @@
+{
+  "slug": "ice-cold-finisher",
+  "title": "Ice Cold Finisher",
+  "category": "Sharpen Your Game",
+  "mentor": {
+    "name": "Mark Bowden",
+    "title": "Football Mentor"
+  },
+  "status": "ready",
+  "audio": {
+    "interactive": {
+      "music": "Interactive  - Ice Cold Finisher - With Music.mp3.mp3",
+      "noMusic": "Interactive  - Ice Cold Finisher - Without Music..mp3"
+    },
+    "guidance": {
+      "music": "Full Guidance  - Ice Cold Finisher - With Music.mp3",
+      "noMusic": "Full Guidance  - Ice Cold Finisher - Without Music..mp3"
+    },
+    "relaxation": {
+      "music": "Relaxation  - Ice Cold Finisher - With Music..mp3",
+      "noMusic": "Relaxation  - Ice Cold Finisher - Without Music..mp3"
+    }
+  },
+  "hasDescription": true,
+  "sortOrder": 3,
+  "descriptionStatus": "final",
+  "audioSourceFolder": "Ice-cold finisher"
+}

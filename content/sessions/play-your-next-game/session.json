@@ -1,0 +1,28 @@
+{
+  "slug": "play-your-next-game",
+  "title": "Play Your Next Game",
+  "category": "Match Day Preparation",
+  "mentor": {
+    "name": "Mark Bowden",
+    "title": "Football Mentor"
+  },
+  "status": "ready",
+  "audio": {
+    "interactive": {
+      "music": "Interactive -Play Your Next Game - With Music.mp3.mp3",
+      "noMusic": "Interactive -Play Your Next Game - Without Music.mp3"
+    },
+    "guidance": {
+      "music": "Full guidance - Play Your Next Game - With Music.mp3",
+      "noMusic": "Full guidance - Play Your Next Game - Without Music.mp3"
+    },
+    "relaxation": {
+      "music": "Relaxation - Play Your Next Game - With Music.mp3",
+      "noMusic": "Relaxation - Play Your Next Game - Without Music.mp3"
+    }
+  },
+  "hasDescription": true,
+  "sortOrder": 4,
+  "descriptionStatus": "final",
+  "audioSourceFolder": "Play Your Next Game"
+}

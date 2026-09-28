@@ -1,0 +1,13 @@
+{
+  "slug": "brilliant-midfielder",
+  "title": "Brilliant Midfielder",
+  "sortOrder": 2,
+  "description": "Three sessions to run the middle of the park: see the picture early, dominate the midfield, and be ready for your next game.",
+  "descriptionStatus": "draft-for-review",
+  "introVideo": "project_details/Recipe_s/intro - Brilliant Midfielder.mov",
+  "sessions": [
+    "scanning-and-awareness",
+    "dominate-the-midfield",
+    "play-your-next-game"
+  ]
+}

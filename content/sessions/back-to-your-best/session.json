@@ -1,0 +1,28 @@
+{
+  "slug": "back-to-your-best",
+  "title": "Back to Your Best",
+  "category": "Confidence",
+  "mentor": {
+    "name": "Mark Bowden",
+    "title": "Football Mentor"
+  },
+  "status": "ready",
+  "audio": {
+    "interactive": {
+      "music": "Interactive  -Confidence - re-live your best - With Music.mp3",
+      "noMusic": "Interactive -Confidence - re-live your best - Without Music.mp3"
+    },
+    "guidance": {
+      "music": "Full Guidance  -Confidence - re-live your best - With Music.mp3",
+      "noMusic": "Full Guiance  -Confidence - re-live your best - Without Music.mp3"
+    },
+    "relaxation": {
+      "music": "Relaxation  -Confidence - re-live your best - With Music.mp3",
+      "noMusic": "Relaxation  -Confidence - re-live your best - Without Music.mp3"
+    }
+  },
+  "hasDescription": true,
+  "sortOrder": 2,
+  "descriptionStatus": "final",
+  "audioSourceFolder": "Confidence - Re-living your best"
+}

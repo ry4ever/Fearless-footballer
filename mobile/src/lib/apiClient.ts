@@ -23,6 +23,7 @@ import type {
   RegisterAccountRequest,
   RegisterAccountResponse,
   SessionCompletionRequest,
+  SessionLibraryResponse,
   SessionRetrieveResponse,
   SignInAccountRequest,
 } from "../../../shared/types";
@@ -524,6 +525,14 @@ export const apiClient = {
   },
 
   // ---- Sessions --------------------------------------------------------------
+
+  async getSessionLibrary(role: BetaUserRole): Promise<ApiResult<SessionLibraryResponse>> {
+    return apiRequest<SessionLibraryResponse>("GET", "/sessions", undefined, {
+      role,
+      authenticated: true,
+      timeoutMs: DEFAULT_TIMEOUT_MS,
+    });
+  },
 
   async getAthleteSession(role: BetaUserRole): Promise<ApiResult<SessionRetrieveResponse>> {
     return apiRequest<SessionRetrieveResponse>("GET", "/sessions/today", undefined, {

@@ -30,7 +30,8 @@ import {
   StatusCard,
   colors,
 } from "../../src/ui";
-import type { PlaybackEventRequest, SessionPackage } from "../../../shared/types";
+import type { PlaybackEventRequest, SessionAudioVariant, SessionPackage } from "../../../shared/types";
+import { MODE_COPY, progressKey, variantFromParams, versionQuery } from "../../src/lib/sessionVersions";
 import {
   addPlaybackInterval,
   clamp,
@@ -45,10 +46,31 @@ import {
 
 const COMPLETION_THRESHOLD = 0.8;
 
-function PlayerScreen({ session, api }: { session: SessionPackage; api: ReturnType<typeof getApiFacade> }) {
+/** Shown while playing when a session has no timed prompts. */
+const GUIDANCE = {
+  interactive: "Stay with Mark's voice. When he hands over, run your own passages of play — he'll bring you back in.",
+  guidance: "Stay with Mark's voice and let the pictures come. He's with you the whole way through.",
+  relaxation: "Settle in and let Mark take you through it. Nothing to do but follow along.",
+} as const;
+
+function PlayerScreen({
+  session,
+  variant,
+  api,
+}: {
+  session: SessionPackage;
+  /** The chosen recording; null for older single-file sessions. */
+  variant: SessionAudioVariant | null;
+  api: ReturnType<typeof getApiFacade>;
+}) {
   const router = useRouter();
   const network = useNetworkState();
-  const player = useAudioPlayer(session.media.voiceUrl, {
+  const mode = variant?.mode ?? "interactive";
+  // Each recording has its own timeline and length, so progress and the
+  // 80% rule are per recording.
+  const progressId = progressKey(session.id, variant);
+  const targetSeconds = variant?.durationSeconds ?? session.defaultDurationSeconds;
+  const player = useAudioPlayer(variant?.url ?? session.media.voiceUrl, {
     updateInterval: 250,
   });
   const status = useAudioPlayerStatus(player);
@@ -61,11 +83,11 @@ function PlayerScreen({ session, api }: { session: SessionPackage; api: ReturnTy
   const intervalsRef = useRef(intervals);
   const lastPlaying = useRef(false);
   const saveQueue = useRef(Promise.resolve());
-  const duration = status.duration > 0 ? status.duration : session.defaultDurationSeconds;
+  const duration = status.duration > 0 ? status.duration : targetSeconds;
   const currentTime = clamp(status.currentTime, 0, duration);
   const playedSeconds = measurePlaybackSeconds(intervalsRef.current);
-  const thresholdSeconds = session.defaultDurationSeconds * COMPLETION_THRESHOLD;
-  const eligible = isCompletionEligible(playedSeconds, session.defaultDurationSeconds);
+  const thresholdSeconds = targetSeconds * COMPLETION_THRESHOLD;
+  const eligible = isCompletionEligible(playedSeconds, targetSeconds);
   const activePhase = getActivePhase(session.phases, currentTime);
   const currentPrompt = getCurrentPrompt(session.prompts, currentTime);
   const offline = network.isConnected !== true || network.isInternetReachable === false;
@@ -86,16 +108,16 @@ function PlayerScreen({ session, api }: { session: SessionPackage; api: ReturnTy
         updatedAt: new Date().toISOString(),
       };
       saveQueue.current = saveQueue.current
-        .then(() => savePlaybackProgress(session.id, progress))
+        .then(() => savePlaybackProgress(progressId, progress))
         .catch(() => undefined);
       return saveQueue.current;
     },
-    [duration, session.id],
+    [duration, progressId],
   );
 
   useEffect(() => {
     let cancelled = false;
-    loadPlaybackProgress(session.id)
+    loadPlaybackProgress(progressId)
       .then((saved) => {
         if (cancelled) return;
         const savedIntervals = saved?.playedIntervals ?? [];
@@ -110,7 +132,7 @@ function PlayerScreen({ session, api }: { session: SessionPackage; api: ReturnTy
     return () => {
       cancelled = true;
     };
-  }, [player.id, session.id]);
+  }, [player.id, progressId]);
 
   useEffect(() => {
     if (!restored || !status.isLoaded || status.duration <= 0) return;
@@ -187,7 +209,8 @@ function PlayerScreen({ session, api }: { session: SessionPackage; api: ReturnTy
       persistProgress(nextTime, intervalsRef.current);
       void api.recordPlaybackEvent(session.id, {
         eventType: "finish",
-        mode: "interactive",
+        mode,
+        musicEnabled: variant?.withMusic,
         playbackPositionSeconds: nextTime,
         clientTimestamp: new Date().toISOString(),
       }).catch(() => null);
@@ -244,7 +267,8 @@ function PlayerScreen({ session, api }: { session: SessionPackage; api: ReturnTy
     player.play();
     reportPlaybackEvent({
       eventType: "start",
-      mode: "interactive",
+      mode,
+      musicEnabled: variant?.withMusic,
       playbackPositionSeconds: lastTime.current,
       clientTimestamp: new Date().toISOString(),
     });
@@ -262,7 +286,8 @@ function PlayerScreen({ session, api }: { session: SessionPackage; api: ReturnTy
     player.pause();
     reportPlaybackEvent({
       eventType: "pause",
-      mode: "interactive",
+      mode,
+      musicEnabled: variant?.withMusic,
       playbackPositionSeconds: nextTime,
       clientTimestamp: new Date().toISOString(),
     });
@@ -278,7 +303,8 @@ function PlayerScreen({ session, api }: { session: SessionPackage; api: ReturnTy
       persistProgress(nextTime, intervalsRef.current);
       reportPlaybackEvent({
         eventType: "seek",
-        mode: "interactive",
+        mode,
+        musicEnabled: variant?.withMusic,
         playbackPositionSeconds: nextTime,
         clientTimestamp: new Date().toISOString(),
       });
@@ -292,7 +318,7 @@ function PlayerScreen({ session, api }: { session: SessionPackage; api: ReturnTy
   const progressPercent = getPlaybackPercent(
     currentTime,
     status.duration,
-    session.defaultDurationSeconds,
+    targetSeconds,
   );
 
   return (
@@ -310,7 +336,7 @@ function PlayerScreen({ session, api }: { session: SessionPackage; api: ReturnTy
         <Text style={styles.backButtonText}>← Athlete home</Text>
       </Pressable>
       <PageTitle
-        eyebrow="Live rehearsal"
+        eyebrow={variant ? `${MODE_COPY[variant.mode].label}${variant.withMusic ? "" : " · no music"}` : "Live rehearsal"}
         title={session.title}
         copy={session.subtitle}
       />
@@ -343,7 +369,8 @@ function PlayerScreen({ session, api }: { session: SessionPackage; api: ReturnTy
         <View style={styles.promptCard}>
           <Text style={styles.promptLabel}>CURRENT PROMPT</Text>
           <Text style={styles.promptText}>
-            {currentPrompt?.promptText ?? "Press play when you are ready."}
+            {currentPrompt?.promptText ??
+              (currentTime > 0 || status.playing ? GUIDANCE[mode] : "Press play when you are ready.")}
           </Text>
           {currentPrompt?.subText ? (
             <Text style={styles.promptSubtext}>{currentPrompt.subText}</Text>
@@ -400,7 +427,7 @@ function PlayerScreen({ session, api }: { session: SessionPackage; api: ReturnTy
       {eligible || finished ? (
         <Button
           label="Review completion"
-          onPress={() => router.push(`/session/${session.id}/complete`)}
+          onPress={() => router.push(`/session/${session.id}/complete${versionQuery(variant)}`)}
           accessibilityLabel="Review session completion"
           testID="review-completion-button"
         />
@@ -415,7 +442,7 @@ function PlayerScreen({ session, api }: { session: SessionPackage; api: ReturnTy
 }
 
 function SessionRouteContent() {
-  const { sessionId } = useLocalSearchParams<{ sessionId: string }>();
+  const { sessionId, mode, music } = useLocalSearchParams<{ sessionId: string; mode?: string; music?: string }>();
   const router = useRouter();
   const [session, setSession] = useState<SessionPackage | null>(null);
   const [loading, setLoading] = useState(true);
@@ -426,14 +453,15 @@ function SessionRouteContent() {
     setLoading(true);
     setError(null);
     const api = getApiFacade({ role: "athlete" });
-    api.getAthleteSession()
-      .then((result) => {
+    api.getSessionLibrary()
+      .then((library) => {
         if (!mounted) return;
-        if (result.session.id !== sessionId) {
+        const found = library.sessions.find((item) => item.id === sessionId && !item.comingSoon);
+        if (!found) {
           router.replace("/athlete/home");
           return;
         }
-        setSession(result.session);
+        setSession(found);
       })
       .catch((caught) => {
         if (!mounted) return;
@@ -471,7 +499,9 @@ function SessionRouteContent() {
     );
   }
   const api = getApiFacade({ role: "athlete" });
-  return <PlayerScreen session={session} api={api} />;
+  const variant = variantFromParams(session, { mode, music });
+  // A new recording means a new native player, so key the screen by it.
+  return <PlayerScreen key={variant?.url ?? session.id} session={session} variant={variant} api={api} />;
 }
 
 export default function SessionScreen() {

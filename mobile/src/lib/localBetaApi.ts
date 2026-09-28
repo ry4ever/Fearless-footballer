@@ -21,6 +21,7 @@ import type {
   RegisterAccountResponse,
   SessionCompletion,
   SessionCompletionRequest,
+  SessionLibraryResponse,
   SessionRetrieveResponse,
   SignInAccountRequest,
   UserAccount,
@@ -76,6 +77,7 @@ export interface LocalBetaApi {
   ): Promise<PairingApprovalResponse>;
   revokePairing(linkId: string): Promise<PairingApprovalResponse>;
   getAthleteSession(): Promise<SessionRetrieveResponse>;
+  getSessionLibrary(): Promise<SessionLibraryResponse>;
   recordPlaybackEvent(
     sessionId: string,
     request: PlaybackEventRequest,
@@ -826,6 +828,12 @@ export function createLocalBetaApi(
     return { session: sampleSessionPackage };
   }
 
+  /** Local beta mode has the one sample session and no programmes. */
+  async function getSessionLibrary(): Promise<SessionLibraryResponse> {
+    const { session } = await getAthleteSession();
+    return { sessions: [session], programmes: [] };
+  }
+
   async function recordPlaybackEvent(
     sessionId: string,
     request: PlaybackEventRequest,
@@ -1010,6 +1018,7 @@ export function createLocalBetaApi(
     approvePairing,
     revokePairing,
     getAthleteSession,
+    getSessionLibrary,
     recordPlaybackEvent,
     completeSession,
     syncOfflineCompletions,

@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { View } from "react-native";
+import { Text, View } from "react-native";
 import { useRouter } from "expo-router";
 import { getApiFacade, LocalApiError } from "../../src/lib/apiFacade";
 import { AthleteRouteGuard, useSession } from "../../src/session";
@@ -12,16 +12,17 @@ import {
   PrivacyNotice,
   ProgressBar,
   Screen,
-  SessionMetadataCard,
   StatusCard,
+  colors,
 } from "../../src/ui";
-import type { AthleteProgress, SessionPackage } from "../../../shared/types";
+import { SessionRow } from "../../src/ui/SessionContent";
+import type { AthleteProgress, SessionLibraryResponse, SessionPackage } from "../../../shared/types";
 
 function AthleteHomeContent() {
   const router = useRouter();
   const { state, signOut, switchRole } = useSession();
   const api = getApiFacade({ role: state?.currentRole ?? "athlete" });
-  const [session, setSession] = useState<SessionPackage | null>(null);
+  const [library, setLibrary] = useState<SessionLibraryResponse | null>(null);
   const [progress, setProgress] = useState<AthleteProgress | null>(null);
   const [pendingCompletions, setPendingCompletions] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -34,13 +35,13 @@ function AthleteHomeContent() {
     setLoading(true);
     setError(null);
     Promise.all([
-      api.getAthleteSession(),
+      api.getSessionLibrary(),
       api.getAthleteProgress(),
       api.getOfflineQueueStatus(),
     ])
-      .then(([sessionResult, progressResult, queueStatus]) => {
+      .then(([libraryResult, progressResult, queueStatus]) => {
         if (!mounted) return;
-        setSession(sessionResult.session);
+        setLibrary(libraryResult);
         setProgress(progressResult);
         setPendingCompletions(queueStatus.pending);
       })
@@ -80,6 +81,19 @@ function AthleteHomeContent() {
   const pending = state?.pairing?.status === "pending_athlete_approval";
   const active = state?.pairing?.status === "active";
   const currentProgress = progress ?? state?.athleteProgress ?? null;
+  const sessions = library?.sessions ?? [];
+  const byId = new Map(sessions.map((item) => [item.id, item]));
+  const programmes = (library?.programmes ?? []).filter((programme) =>
+    programme.sessionIds.some((id) => byId.has(id)),
+  );
+  const playable = sessions.filter((item) => !item.comingSoon);
+  const comingSoon = sessions.filter((item) => item.comingSoon);
+  const groups = new Map<string, SessionPackage[]>();
+  for (const item of playable) {
+    const key = item.focusArea ?? "Sessions";
+    groups.set(key, [...(groups.get(key) ?? []), item]);
+  }
+  const openSession = (item: SessionPackage) => router.push(`/library/${item.id}`);
 
   return (
     <Screen testID="athlete-home-screen">
@@ -122,21 +136,48 @@ function AthleteHomeContent() {
         </StatusCard>
       ) : null}
       {loading ? (
-        <StatusCard tone="info" title="Loading one beta session">
-          Checking your authorized session…
+        <StatusCard tone="info" title="Loading your sessions">
+          Checking your training library…
         </StatusCard>
-      ) : session ? (
-        <SessionMetadataCard session={session} />
+      ) : !error && playable.length === 0 ? (
+        <StatusCard tone="info" title="No session available yet">
+          New training is on its way. Check back soon — your progress is saved.
+        </StatusCard>
       ) : null}
-      <Button
-        label="Start training session"
-        disabled={!session || Boolean(error)}
-        onPress={() => {
-          if (session) router.push(`/session/${session.id}`);
-        }}
-        accessibilityLabel="Start the off-pitch training session"
-        testID="start-rehearsal-button"
-      />
+      {programmes.map((programme) => (
+        <View key={programme.slug} style={styles.section} testID={`programme-${programme.slug}`}>
+          <Text style={styles.eyebrow}>PROGRAMME</Text>
+          <Text style={styles.sectionTitle}>{programme.title}</Text>
+          <Text style={styles.sectionCopy}>{programme.description}</Text>
+          {programme.sessionIds.map((id, index) => {
+            const item = byId.get(id);
+            return item ? (
+              <SessionRow key={id} session={item} index={index + 1} onPress={() => openSession(item)} />
+            ) : null;
+          })}
+        </View>
+      ))}
+      {playable.length > 0 ? (
+        <View style={styles.section} testID="all-sessions">
+          <Text style={styles.eyebrow}>ALL SESSIONS</Text>
+          {Array.from(groups.entries()).map(([group, items]) => (
+            <View key={group}>
+              <Text style={styles.groupLabel}>{group}</Text>
+              {items.map((item) => (
+                <SessionRow key={item.id} session={item} onPress={() => openSession(item)} />
+              ))}
+            </View>
+          ))}
+        </View>
+      ) : null}
+      {comingSoon.length > 0 ? (
+        <View style={styles.section} testID="coming-soon">
+          <Text style={styles.eyebrow}>COMING SOON</Text>
+          {comingSoon.map((item) => (
+            <SessionRow key={item.id} session={item} onPress={() => openSession(item)} />
+          ))}
+        </View>
+      ) : null}
       <Button
         label={pending ? "Review pairing" : active ? "Manage caregiver link" : "Pair with a parent or guardian"}
         variant="secondary"
@@ -184,6 +225,11 @@ function AthleteHomeContent() {
 const styles = {
   stateRow: { gap: 12, marginBottom: 12 },
   progressWrap: { marginBottom: 16 },
+  section: { marginBottom: 20 },
+  eyebrow: { color: colors.cyan, fontSize: 11, fontWeight: "900", letterSpacing: 1, marginBottom: 6 },
+  sectionTitle: { color: colors.white, fontSize: 19, fontWeight: "900", marginBottom: 4 },
+  sectionCopy: { color: colors.muted, fontSize: 14, lineHeight: 21, marginBottom: 12 },
+  groupLabel: { color: colors.muted, fontSize: 13, fontWeight: "700", marginTop: 8, marginBottom: 8 },
 } as const;
 
 export default function AthleteHomeScreen() {

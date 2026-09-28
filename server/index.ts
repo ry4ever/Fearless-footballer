@@ -77,8 +77,16 @@ validateProductionConfig();
 // Zod schemas for request validation
 // =============================================================================
 
-const emailSchema = z.string().email().transform((value) => value.trim().toLowerCase());
-const displayNameSchema = z.string().trim().min(1).max(100);
+const emailSchema = z
+  .string()
+  .trim()
+  .email("Enter a valid email address")
+  .transform((value) => value.toLowerCase());
+const displayNameSchema = z
+  .string()
+  .trim()
+  .min(1, "Enter your name")
+  .max(100, "Name must be 100 characters or fewer");
 
 const registerAccountSchema = z.object({
   role: z.enum(["athlete", "caregiver"]),
@@ -86,7 +94,7 @@ const registerAccountSchema = z.object({
   displayName: displayNameSchema.optional(),
   email: emailSchema,
   password: passwordSchema,
-  birthDate: z.string().date().optional(),
+  birthDate: z.string().date("Enter your date of birth as YYYY-MM-DD").optional(),
   timezone: z.string().trim().min(1).optional(),
   region: z.string().trim().min(1).max(2).optional(),
   privacyAcknowledged: z.boolean().optional(),
@@ -136,6 +144,17 @@ const completionSchema = z.object({
     .optional(),
   idempotencyKey: z.string().trim().min(1),
 });
+
+/**
+ * A message the person filling in the form can act on. Schemas above give
+ * user-facing messages; zod's built-in ones (e.g. wrong types) are replaced
+ * by the fallback so internals aren't exposed.
+ */
+function firstIssueMessage(error: z.ZodError, fallback: string): string {
+  const issue = error.issues[0];
+  if (!issue || issue.code === "invalid_type" || issue.code === "unrecognized_keys") return fallback;
+  return issue.message || fallback;
+}
 
 // =============================================================================
 // Auth helpers
@@ -321,7 +340,7 @@ async function calculateMetrics(userId: string, now: Date) {
 async function registerAccountHandler(req: Request, res: Response) {
   const parsed = registerAccountSchema.safeParse(req.body);
   if (!parsed.success) {
-    res.status(422).json({ error: "Invalid registration payload" });
+    res.status(422).json({ error: firstIssueMessage(parsed.error, "Check your details and try again") });
     return;
   }
 
@@ -1654,7 +1673,7 @@ async function passwordResetConfirmHandler(req: Request, res: Response) {
     })
     .safeParse(req.body);
   if (!parsed.success) {
-    res.status(422).json({ error: "Invalid reset payload" });
+    res.status(422).json({ error: firstIssueMessage(parsed.error, "Invalid reset payload") });
     return;
   }
 

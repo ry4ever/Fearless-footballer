@@ -1,14 +1,49 @@
 import { useCallback, useEffect, useState } from "react";
-import { ArrowRight, Flame, Headphones } from "lucide-react";
-import type { AthleteProgress, SessionPackage } from "@shared/types";
+import { ChevronRight, Flame } from "lucide-react";
+import type { AthleteProgress, SessionLibraryResponse, SessionPackage } from "@shared/types";
 import { FearlessHeaderLogo } from "../components/icons/CustomIcons";
 import { apiClient } from "../lib/apiClient";
+import { formatMinutes } from "./LiveSessionDetail";
 import { offlineQueue } from "../lib/offlineQueue";
 import { loadPlan } from "./plan";
 import { useSession } from "./session";
 
 interface LiveHQScreenProps {
-  onStartSession: (session: SessionPackage) => void;
+  onOpenSession: (session: SessionPackage) => void;
+}
+
+/** Shortest-to-longest length across the session's versions, e.g. "8–10 min". */
+function lengthLabel(session: SessionPackage) {
+  const lengths = (session.audio ?? []).map((variant) => variant.durationSeconds);
+  if (lengths.length === 0) return formatMinutes(session.defaultDurationSeconds);
+  const min = Math.round(Math.min(...lengths) / 60);
+  const max = Math.round(Math.max(...lengths) / 60);
+  return min === max ? `${min} min` : `${min}–${max} min`;
+}
+
+function SessionRow({
+  session,
+  index,
+  onOpen,
+}: {
+  session: SessionPackage;
+  index?: number;
+  onOpen: (session: SessionPackage) => void;
+}) {
+  return (
+    <button type="button" className={`live-session-row ${session.comingSoon ? "soon" : ""}`} onClick={() => onOpen(session)}>
+      {index !== undefined && <span className="row-index">{index}</span>}
+      <span className="row-text">
+        <strong>{session.title}</strong>
+        <small>
+          {session.comingSoon
+            ? session.focusArea ?? ""
+            : [lengthLabel(session), session.focusArea].filter(Boolean).join(" · ")}
+        </small>
+      </span>
+      {session.comingSoon ? <span className="row-badge">SOON</span> : <ChevronRight size={18} color="#69e0fa" />}
+    </button>
+  );
 }
 
 const GAUGE_CIRCUMFERENCE = 264;
@@ -20,10 +55,10 @@ function greeting(now = new Date()) {
   return "GOOD EVENING";
 }
 
-export function LiveHQScreen({ onStartSession }: LiveHQScreenProps) {
+export function LiveHQScreen({ onOpenSession }: LiveHQScreenProps) {
   const { user } = useSession();
   const [progress, setProgress] = useState<AthleteProgress | null>(null);
-  const [session, setSession] = useState<SessionPackage | null>(null);
+  const [library, setLibrary] = useState<SessionLibraryResponse | null>(null);
   const [error, setError] = useState("");
   const [pending, setPending] = useState(() => (user ? offlineQueue.pendingCount(user.id) : 0));
   const plan = user ? loadPlan(user.id) : null;
@@ -31,12 +66,9 @@ export function LiveHQScreen({ onStartSession }: LiveHQScreenProps) {
   const load = useCallback(async () => {
     setError("");
     try {
-      const [nextProgress, nextSession] = await Promise.all([
-        apiClient.getAthleteProgress(),
-        apiClient.getTodaySession(),
-      ]);
+      const [nextProgress, nextLibrary] = await Promise.all([apiClient.getAthleteProgress(), apiClient.getLibrary()]);
       setProgress(nextProgress);
-      setSession(nextSession);
+      setLibrary(nextLibrary);
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "We couldn't load your HQ.");
     }
@@ -73,7 +105,7 @@ export function LiveHQScreen({ onStartSession }: LiveHQScreenProps) {
     );
   }
 
-  if (!progress || !session) {
+  if (!progress || !library) {
     return (
       <div className="screen live-screen">
         <div className="live-center" aria-live="polite">
@@ -85,7 +117,15 @@ export function LiveHQScreen({ onStartSession }: LiveHQScreenProps) {
   }
 
   const score = Math.max(0, Math.min(100, progress.score));
-  const minutes = Math.round(session.defaultDurationSeconds / 60);
+  const byId = new Map(library.sessions.map((session) => [session.id, session]));
+  const programmes = library.programmes.filter((programme) => programme.sessionIds.some((id) => byId.has(id)));
+  const playable = library.sessions.filter((session) => !session.comingSoon);
+  const comingSoon = library.sessions.filter((session) => session.comingSoon);
+  const groups = new Map<string, SessionPackage[]>();
+  for (const session of playable) {
+    const key = session.focusArea ?? "Sessions";
+    groups.set(key, [...(groups.get(key) ?? []), session]);
+  }
 
   return (
     <div className="screen hq-screen live-screen">
@@ -157,22 +197,47 @@ export function LiveHQScreen({ onStartSession }: LiveHQScreenProps) {
         </div>
       </section>
 
-      <section className="live-card" aria-label="Today's session">
-        <span className="eyebrow">TODAY'S OFF-PITCH TRAINING</span>
-        <h2>{session.title}</h2>
-        <p className="live-copy">{session.subtitle}</p>
-        <p className="live-note" style={{ textAlign: "left", marginTop: 8 }}>
-          <Headphones size={13} style={{ display: "inline", verticalAlign: "-2px" }} /> {minutes} min · with {session.mentor.name}
-        </p>
-        <button
-          type="button"
-          className="primary-button"
-          style={{ width: "100%", marginTop: 14 }}
-          onClick={() => onStartSession(session)}
-        >
-          {progress.lastRep.completedToday ? "Train again" : "Start training"} <ArrowRight size={18} />
-        </button>
-      </section>
+      {programmes.length > 0 && (
+        <section aria-label="Programmes">
+          <span className="eyebrow" style={{ marginBottom: 8 }}>
+            YOUR PROGRAMMES
+          </span>
+          {programmes.map((programme) => (
+            <div key={programme.slug} className="live-card" style={{ marginTop: 10 }}>
+              <h2>{programme.title}</h2>
+              <p className="live-copy" style={{ marginBottom: 12 }}>
+                {programme.description}
+              </p>
+              {programme.sessionIds.map((id, index) => {
+                const session = byId.get(id);
+                return session ? <SessionRow key={id} session={session} index={index + 1} onOpen={onOpenSession} /> : null;
+              })}
+            </div>
+          ))}
+        </section>
+      )}
+
+      {playable.length === 0 ? (
+        <section className="live-card" aria-label="Sessions">
+          <span className="eyebrow">OFF-PITCH TRAINING</span>
+          <h2>No session available yet</h2>
+          <p className="live-copy">New training is on its way. Check back soon – your progress is saved.</p>
+        </section>
+      ) : (
+        <section aria-label="All sessions">
+          <span className="eyebrow">ALL SESSIONS</span>
+          {Array.from(groups.entries()).map(([group, sessions]) => (
+            <div key={group} style={{ marginTop: 12 }}>
+              <p className="live-note" style={{ textAlign: "left", marginBottom: 6 }}>
+                {group}
+              </p>
+              {sessions.map((session) => (
+                <SessionRow key={session.id} session={session} onOpen={onOpenSession} />
+              ))}
+            </div>
+          ))}
+        </section>
+      )}
 
       <section className="live-card" aria-label="Last 7 days">
         <span className="eyebrow">LAST 7 DAYS</span>
@@ -190,6 +255,17 @@ export function LiveHQScreen({ onStartSession }: LiveHQScreenProps) {
           </p>
         )}
       </section>
+
+      {comingSoon.length > 0 && (
+        <section aria-label="Coming soon">
+          <span className="eyebrow">COMING SOON</span>
+          <div style={{ marginTop: 8 }}>
+            {comingSoon.map((session) => (
+              <SessionRow key={session.id} session={session} onOpen={onOpenSession} />
+            ))}
+          </div>
+        </section>
+      )}
     </div>
   );
 }

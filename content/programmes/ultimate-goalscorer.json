@@ -1,0 +1,13 @@
+{
+  "slug": "ultimate-goalscorer",
+  "title": "Ultimate Goalscorer Program",
+  "sortOrder": 1,
+  "description": "Three sessions to get you scoring: back to your best, ice cold in front of goal, and ready for your next game.",
+  "descriptionStatus": "draft-for-review",
+  "introVideo": "project_details/Recipe_s/Intro - Ultimate goalscorer program.mov",
+  "sessions": [
+    "back-to-your-best",
+    "ice-cold-finisher",
+    "play-your-next-game"
+  ]
+}

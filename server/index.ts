@@ -2,7 +2,7 @@ import express, { type Request, type Response, type NextFunction } from "express
 import { randomBytes, randomInt } from "node:crypto";
 import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
-import { PrismaClient, type MindsetCategory, type SessionMode, type ReflectionFeeling } from "@prisma/client";
+import { Prisma, PrismaClient, type MindsetCategory, type SessionMode, type ReflectionFeeling } from "@prisma/client";
 import { z } from "zod";
 import {
   app as securityApp,
@@ -31,6 +31,8 @@ import {
   type OfflineQueueStatus,
   type PairingLink,
   type PairingStatusResponse,
+  type SessionLibraryResponse,
+  type SessionPackage,
   type PlaybackEventRequest,
   type RegisterAccountRequest,
   type RegisterAccountResponse,
@@ -124,7 +126,7 @@ const pairingApprovalSchema = z.object({
 
 const playbackEventSchema = z.object({
   eventType: z.enum(["start", "heartbeat", "pause", "seek", "finish"]),
-  mode: z.enum(["interactive"]),
+  mode: z.enum(["interactive", "guidance", "relaxation"]),
   musicEnabled: z.boolean().optional(),
   playbackPositionSeconds: z.number().nonnegative(),
   clientTimestamp: z.string().datetime(),
@@ -133,7 +135,8 @@ const playbackEventSchema = z.object({
 const completionSchema = z.object({
   sessionId: z.string().min(1),
   sessionVersion: z.string().min(1),
-  mode: z.enum(["interactive"]),
+  mode: z.enum(["interactive", "guidance", "relaxation"]),
+  withMusic: z.boolean().optional(),
   completionDurationSeconds: z.number().nonnegative(),
   completedAt: z.string().datetime(),
   reflection: z
@@ -330,6 +333,83 @@ async function calculateMetrics(userId: string, now: Date) {
     delta: metrics.score - metrics.scoreWeekAgo,
     sevenDayPattern: metrics.sevenDayPattern,
     scoreTrend: metrics.scoreTrend,
+  };
+}
+
+// =============================================================================
+// Session packages
+// =============================================================================
+
+const MEDIA_PUBLIC_BASE_URL = (process.env.MEDIA_PUBLIC_BASE_URL ?? "").trim().replace(/\/+$/, "");
+
+/** Media keys ("audio/…") resolve against the public media host; URLs pass through. */
+function mediaUrl(value: string): string {
+  if (!value || /^https?:\/\//i.test(value) || !MEDIA_PUBLIC_BASE_URL) return value;
+  return `${MEDIA_PUBLIC_BASE_URL}/${value.replace(/^\/+/, "")}`;
+}
+
+const SESSION_PACKAGE_INCLUDE = {
+  phases: { orderBy: { startSeconds: "asc" as const } },
+  prompts: { orderBy: { timestampSeconds: "asc" as const } },
+  audio: true,
+} satisfies Prisma.SessionInclude;
+
+type SessionWithPackageParts = Prisma.SessionGetPayload<{ include: typeof SESSION_PACKAGE_INCLUDE }>;
+
+const MODE_FROM_DB = { INTERACTIVE: "interactive", GUIDANCE: "guidance", RELAXATION: "relaxation" } as const;
+const MODE_TO_DB = { interactive: "INTERACTIVE", guidance: "GUIDANCE", relaxation: "RELAXATION" } as const;
+const MODE_ORDER: SessionMode[] = ["INTERACTIVE", "GUIDANCE", "RELAXATION"];
+
+function toSessionPackage(session: SessionWithPackageParts): SessionPackage {
+  const audio = [...session.audio]
+    .sort((a, b) => MODE_ORDER.indexOf(a.mode) - MODE_ORDER.indexOf(b.mode) || Number(b.withMusic) - Number(a.withMusic))
+    .map((variant) => ({
+      mode: MODE_FROM_DB[variant.mode],
+      withMusic: variant.withMusic,
+      url: mediaUrl(variant.url),
+      durationSeconds: variant.durationSeconds,
+    }));
+  const modes = Array.from(new Set(audio.map((variant) => variant.mode)));
+  return {
+    id: session.id,
+    slug: session.slug,
+    version: session.version,
+    title: session.title,
+    subtitle: session.subtitle,
+    category: session.category.toLowerCase(),
+    mindset: "calm",
+    defaultDurationSeconds: session.defaultDuration,
+    mentor: {
+      id: `mentor_${session.mentorName.toLowerCase().replace(/[^a-z0-9]+/g, "_")}`,
+      name: session.mentorName,
+      title: session.mentorTitle,
+      avatarUrl: session.mentorAvatarUrl ?? undefined,
+    },
+    thumbnailUrl: session.heroImageUrl ?? undefined,
+    heroImageUrl: session.heroImageUrl ?? undefined,
+    availableModes: modes.length > 0 ? modes : ["interactive"],
+    media: {
+      voiceUrl: mediaUrl(session.voiceStreamUrl),
+      musicBedUrl: session.musicBedUrl ? mediaUrl(session.musicBedUrl) : undefined,
+      captionsUrl: session.captionsUrl ?? undefined,
+      transcriptUrl: undefined,
+      transcriptLocale: "en",
+    },
+    phases: session.phases.map((phase) => ({
+      number: phase.phaseNumber,
+      label: phase.label,
+      startSeconds: phase.startSeconds,
+      endSeconds: phase.endSeconds,
+    })),
+    prompts: session.prompts.map((prompt) => ({
+      timestampSeconds: prompt.timestampSeconds,
+      promptText: prompt.promptText,
+      subText: prompt.subText ?? undefined,
+    })),
+    focusArea: session.focusArea ?? undefined,
+    descriptionMarkdown: session.descriptionMarkdown ?? undefined,
+    comingSoon: session.comingSoon || undefined,
+    audio: session.comingSoon ? undefined : audio,
   };
 }
 
@@ -1065,52 +1145,68 @@ async function getAthleteSessionHandler(req: Request, res: Response) {
 
   const session = await prisma.session.findFirst({
     where: { isPublished: true },
-    include: { phases: true, prompts: true },
+    orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }],
+    include: SESSION_PACKAGE_INCLUDE,
   });
   if (!session) {
     res.status(404).json({ error: "No published session available" });
     return;
   }
 
-  const sampleSession = {
-    id: session.id,
-    slug: session.slug,
-    version: session.version,
-    title: session.title,
-    subtitle: session.subtitle,
-    category: session.category.toLowerCase(),
-    mindset: "calm",
-    defaultDurationSeconds: session.defaultDuration,
-    mentor: {
-      id: "men_alex_rivera",
-      name: session.mentorName,
-      title: session.mentorTitle,
-      avatarUrl: session.mentorAvatarUrl ?? undefined,
+  res.json({ session: toSessionPackage(session) });
+}
+
+/** The whole library: playable sessions, coming-soon ones, and programmes. */
+async function getSessionLibraryHandler(req: Request, res: Response) {
+  if (!req.auth) {
+    res.status(401).json({ error: "Authentication required" });
+    return;
+  }
+  const athlete = await prisma.athleteProfile.findUnique({ where: { userId: req.auth.userId } });
+  if (!athlete) {
+    res.status(404).json({ error: "Athlete profile not found" });
+    return;
+  }
+  const link = await prisma.caregiverLink.findFirst({
+    where: {
+      athleteId: athlete.id,
+      status: "ACTIVE",
+      coppaConsent: true,
+      consentedAt: { not: null },
+      consentRevokedAt: null,
+      athleteApprovedAt: { not: null },
     },
-    thumbnailUrl: session.heroImageUrl ?? undefined,
-    heroImageUrl: session.heroImageUrl ?? undefined,
-    availableModes: ["interactive"] as const,
-    media: {
-      voiceUrl: session.voiceStreamUrl,
-      musicBedUrl: session.musicBedUrl ?? undefined,
-      captionsUrl: session.captionsUrl ?? undefined,
-      transcriptUrl: undefined,
-      transcriptLocale: "en",
-    },
-    phases: session.phases.map((phase: { phaseNumber: number; label: string; startSeconds: number; endSeconds: number }) => ({
-      number: phase.phaseNumber,
-      label: phase.label,
-      startSeconds: phase.startSeconds,
-      endSeconds: phase.endSeconds,
-    })),
-    prompts: session.prompts.map((prompt: { timestampSeconds: number; promptText: string; subText: string | null }) => ({
-      timestampSeconds: prompt.timestampSeconds,
-      promptText: prompt.promptText,
-      subText: prompt.subText ?? undefined,
+  });
+  if (!link) {
+    res.status(403).json({ error: "Complete consent and pairing before opening a session" });
+    return;
+  }
+
+  const [sessions, programmes] = await Promise.all([
+    prisma.session.findMany({
+      where: { OR: [{ isPublished: true }, { comingSoon: true }] },
+      orderBy: [{ comingSoon: "asc" }, { sortOrder: "asc" }, { title: "asc" }],
+      include: SESSION_PACKAGE_INCLUDE,
+    }),
+    prisma.programme.findMany({
+      where: { isPublished: true },
+      orderBy: { sortOrder: "asc" },
+      include: { sessions: { orderBy: { position: "asc" }, select: { sessionId: true } } },
+    }),
+  ]);
+
+  const body: SessionLibraryResponse = {
+    sessions: sessions.map(toSessionPackage),
+    programmes: programmes
+      .filter((programme) => programme.sessions.length > 0)
+      .map((programme) => ({
+      slug: programme.slug,
+      title: programme.title,
+      description: programme.description,
+      sessionIds: programme.sessions.map((member) => member.sessionId),
     })),
   };
-
-  res.json({ session: sampleSession });
+  res.json(body);
 }
 
 async function recordPlaybackEventHandler(req: Request, res: Response) {
@@ -1220,7 +1316,7 @@ async function completeSessionHandler(req: Request, res: Response) {
     return;
   }
 
-  const session = await prisma.session.findFirst({ where: { id: request.sessionId } });
+  const session = await prisma.session.findFirst({ where: { id: request.sessionId }, include: { audio: true } });
   if (!session) {
     res.status(404).json({ error: "This completion does not match the beta session" });
     return;
@@ -1231,7 +1327,15 @@ async function completeSessionHandler(req: Request, res: Response) {
     return;
   }
 
-  const threshold = Math.ceil(session.defaultDuration * 0.8);
+  // The versions differ in length, so the 80% rule uses the one actually played.
+  const variant = session.audio.find(
+    (row) => row.mode === MODE_TO_DB[request.mode] && row.withMusic === (request.withMusic ?? true),
+  );
+  if (session.audio.length > 0 && !variant) {
+    res.status(422).json({ error: "This session doesn't have that version" });
+    return;
+  }
+  const threshold = Math.ceil((variant?.durationSeconds ?? session.defaultDuration) * 0.8);
   if (request.completionDurationSeconds < threshold) {
     res.status(422).json({ error: `Complete at least ${threshold} seconds of playback before finishing` });
     return;
@@ -1265,7 +1369,7 @@ async function completeSessionHandler(req: Request, res: Response) {
         data: {
           userId: req.auth!.userId,
           sessionId: session.id,
-          mode: "INTERACTIVE",
+          mode: MODE_TO_DB[request.mode],
           durationSeconds: request.completionDurationSeconds,
           completedAt,
           idempotencyKey,
@@ -1411,6 +1515,7 @@ async function getCaregiverDashboardHandler(req: Request, res: Response) {
   const lastCompletion = await prisma.sessionCompleted.findFirst({
     where: { userId: athleteProfile.userId },
     orderBy: { completedAt: "desc" },
+    include: { session: { select: { title: true } } },
   });
 
   const durationText = lastCompletion
@@ -1449,7 +1554,7 @@ async function getCaregiverDashboardHandler(req: Request, res: Response) {
         bestDays: metrics.bestStreak,
       },
       lastRep: {
-        title: "Nerves = Performance",
+        title: lastCompletion?.session.title ?? "No completed reps",
         duration: durationText,
         completedAt: lastCompletion?.completedAt.toISOString() ?? new Date().toISOString(),
         completedToday: lastCompletion
@@ -1503,12 +1608,12 @@ async function getAthleteProgressHandler(req: Request, res: Response) {
   const lastCompletion = await prisma.sessionCompleted.findFirst({
     where: { userId: metrics.athlete.userId },
     orderBy: { completedAt: "desc" },
-    include: { reflection: true },
+    include: { reflection: true, session: { select: { title: true } } },
   });
 
   const lastRep = lastCompletion
     ? {
-        title: "Nerves = Performance",
+        title: lastCompletion.session.title,
         duration: `${Math.floor(lastCompletion.durationSeconds / 60)} min ${lastCompletion.durationSeconds % 60} sec`,
         completedAt: lastCompletion.completedAt.toISOString(),
         completedToday:
@@ -2021,6 +2126,7 @@ app.post("/auth/pairing/:linkId/approve", wrap(authenticate), requireRole("athle
 app.delete("/auth/pairing/:linkId", wrap(authenticate), requireRole("athlete"), wrap(revokePairingHandler));
 app.delete("/auth/consent/:linkId", wrap(authenticate), wrap(revokeConsentHandler));
 app.get("/sessions/today", wrap(authenticate), requireRole("athlete"), wrap(getAthleteSessionHandler));
+app.get("/sessions", wrap(authenticate), requireRole("athlete"), wrap(getSessionLibraryHandler));
 app.get("/sessions/:sessionId/stream-url", wrap(authenticate), wrap(getSessionStreamUrlHandler));
 app.post("/sessions/:sessionId/events", wrap(authenticate), requireRole("athlete"), wrap(recordPlaybackEventHandler));
 app.post("/sessions/:sessionId/complete", wrap(authenticate), requireRole("athlete"), wrap(completeSessionHandler));

@@ -1,0 +1,28 @@
+{
+  "slug": "dominate-the-midfield",
+  "title": "Dominate the Midfield",
+  "category": "Sharpen Your Game",
+  "mentor": {
+    "name": "Mark Bowden",
+    "title": "Football Mentor"
+  },
+  "status": "ready",
+  "sortOrder": 6,
+  "hasDescription": true,
+  "descriptionStatus": "draft-for-review",
+  "audioSourceFolder": "Dominate the Midfield",
+  "audio": {
+    "interactive": {
+      "music": "Interactive - Dominate the Midfield - With Music.mp3",
+      "noMusic": "Interactive - Dominate the Midfield - Without Music.mp3"
+    },
+    "guidance": {
+      "music": "Full Guidance - Dominate the Midfield - With Music.mp3.mp3",
+      "noMusic": "Full Guidance - Dominate the Midfield - Without Music.mp3"
+    },
+    "relaxation": {
+      "music": "Relaxation - Dominate the Midfield - With Music.mp3",
+      "noMusic": "Relaxation - Dominate the Midfield - Without Music.mp3"
+    }
+  }
+}

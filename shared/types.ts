@@ -91,10 +91,39 @@ export interface SessionPackage {
   mentor: Mentor;
   heroImageUrl?: string;
   thumbnailUrl?: string;
-  availableModes: readonly [BetaSessionMode];
+  availableModes: readonly SessionMode[];
   media: SessionMediaPackage;
+  /** Library group from the content catalog, e.g. "Sharpen Your Game". */
+  focusArea?: string;
+  /** Full description shown before starting (Markdown). */
+  descriptionMarkdown?: string;
+  /** Listed but not playable yet. */
+  comingSoon?: boolean;
+  /** Each recorded version; absent for older single-file sessions. */
+  audio?: SessionAudioVariant[];
   phases: SessionPhase[];
   prompts: SessionPrompt[];
+}
+
+export interface SessionAudioVariant {
+  mode: SessionMode;
+  withMusic: boolean;
+  url: string;
+  durationSeconds: number;
+}
+
+export interface ProgrammeSummary {
+  slug: string;
+  title: string;
+  description: string;
+  /** Session ids in programme order. */
+  sessionIds: string[];
+}
+
+export interface SessionLibraryResponse {
+  /** Playable sessions first (library order), then coming-soon ones. */
+  sessions: SessionPackage[];
+  programmes: ProgrammeSummary[];
 }
 
 export interface UserAccount {
@@ -168,7 +197,7 @@ export interface SessionCompletion {
   id: string;
   sessionId: string;
   sessionVersion: string;
-  mode: BetaSessionMode;
+  mode: SessionMode;
   durationSeconds: number;
   completedAt: string;
   reflection?: Reflection;
@@ -178,7 +207,9 @@ export interface SessionCompletion {
 export interface SessionCompletionRequest {
   sessionId: string;
   sessionVersion: string;
-  mode: BetaSessionMode;
+  mode: SessionMode;
+  /** Which recording was played; defaults to the version with music. */
+  withMusic?: boolean;
   completionDurationSeconds: number;
   completedAt: string;
   reflection?: Reflection;
@@ -371,7 +402,7 @@ export interface SessionRetrieveResponse {
 
 export interface PlaybackEventRequest {
   eventType: "start" | "heartbeat" | "pause" | "seek" | "finish";
-  mode: BetaSessionMode;
+  mode: SessionMode;
   musicEnabled?: boolean;
   playbackPositionSeconds: number;
   clientTimestamp: string;

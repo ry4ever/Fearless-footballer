@@ -1,0 +1,28 @@
+{
+  "slug": "scanning-and-awareness",
+  "title": "Scanning & Awareness",
+  "category": "Sharpen Your Game",
+  "mentor": {
+    "name": "Mark Bowden",
+    "title": "Football Mentor"
+  },
+  "status": "ready",
+  "sortOrder": 5,
+  "hasDescription": true,
+  "descriptionStatus": "draft-for-review",
+  "audioSourceFolder": "Scanning & Awareness",
+  "audio": {
+    "interactive": {
+      "music": "Inreactive - Scanning & Awareness - With Music.mp3",
+      "noMusic": "Inreactive - Scanning & Awareness - Without Music.mp3"
+    },
+    "guidance": {
+      "music": "Full Guidance - Scanning & Awareness - With Music.mp3",
+      "noMusic": "Full Guidance - Scanning & Awareness - Without Music.mp3"
+    },
+    "relaxation": {
+      "music": "Relaxation  - Scanning & Awareness - With Music.mp3",
+      "noMusic": "Relaxation  - Scanning & Awareness - Without Music.mp3"
+    }
+  }
+}

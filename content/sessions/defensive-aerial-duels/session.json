@@ -1,0 +1,28 @@
+{
+  "slug": "defensive-aerial-duels",
+  "title": "Defensive Aerial Duels",
+  "category": "Sharpen Your Game",
+  "mentor": {
+    "name": "Mark Bowden",
+    "title": "Football Mentor"
+  },
+  "status": "ready",
+  "sortOrder": 7,
+  "hasDescription": true,
+  "descriptionStatus": "draft-for-review",
+  "audioSourceFolder": "Defensive Aerial Duels",
+  "audio": {
+    "interactive": {
+      "music": "Interactice - Defensive Aerial Duels - With Music.mp3",
+      "noMusic": "Interactive - Defensive Aerial Duels - Without Music.mp3"
+    },
+    "guidance": {
+      "music": "Full Guidance - Defensive Aerial Duels - With Music.mp3",
+      "noMusic": "Full Guidance - Defensive Aerial Duels - Without Music.mp3"
+    },
+    "relaxation": {
+      "music": "Relaxation Defensive Aerial Duels - With Music.mp3",
+      "noMusic": "Relaxation Defensive Aerial Duels - Without Music.mp3"
+    }
+  }
+}

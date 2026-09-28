@@ -106,11 +106,60 @@ model Session {
   transcriptText   String
   createdAt        DateTime           @default(now())
   updatedAt        DateTime           @updatedAt
-  sessionCompletions SessionCompleted[]
-  phases             SessionPhase[]
-  prompts            SessionPrompt[]
+  /// Player-facing group from the content catalog, e.g. "Sharpen Your Game".
+  focusArea           String?
+  /// Library order (ascending).
+  sortOrder           Int                @default(0)
+  /// Full description shown before starting (Markdown).
+  descriptionMarkdown String?
+  /// Listed in the library but not playable yet (no audio recorded).
+  comingSoon          Boolean            @default(false)
+  sessionCompletions  SessionCompleted[]
+  phases              SessionPhase[]
+  prompts             SessionPrompt[]
+  audio               SessionAudio[]
+  programmes          ProgrammeSession[]
 
   @@index([category, isPublished])
+}
+
+/// One recorded version of a session: a mode, with or without music.
+model SessionAudio {
+  id              String      @id @default(cuid())
+  sessionId       String
+  mode            SessionMode
+  withMusic       Boolean
+  /// Media key such as "audio/<slug>/interactive-music.mp3", resolved against
+  /// MEDIA_PUBLIC_BASE_URL, or an absolute URL.
+  url             String
+  durationSeconds Int
+  session         Session     @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  @@unique([sessionId, mode, withMusic])
+}
+
+/// A named sequence of sessions, e.g. "Ultimate Goalscorer Program".
+model Programme {
+  id          String             @id @default(cuid())
+  slug        String             @unique
+  title       String
+  description String
+  sortOrder   Int                @default(0)
+  isPublished Boolean            @default(true)
+  sessions    ProgrammeSession[]
+  createdAt   DateTime           @default(now())
+  updatedAt   DateTime           @updatedAt
+}
+
+model ProgrammeSession {
+  programmeId String
+  sessionId   String
+  position    Int
+  programme   Programme @relation(fields: [programmeId], references: [id], onDelete: Cascade)
+  session     Session   @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  @@id([programmeId, position])
+  @@unique([programmeId, sessionId])
 }
 
 model SessionCompleted {

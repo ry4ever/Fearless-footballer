@@ -25,7 +25,9 @@
     "test": "vitest run",
     "test:coverage": "vitest run -c vitest.coverage.config.ts --coverage",
     "test:watch": "vitest",
-    "verify": "tsx scripts/verifyProductionReadiness.ts"
+    "verify": "tsx scripts/verifyProductionReadiness.ts",
+    "content:upload": "tsx --env-file=.env scripts/uploadContent.ts",
+    "content:measure": "tsx scripts/uploadContent.ts --dry-run"
   },
   "dependencies": {
     "@hookform/resolvers": "^5.2.2",
@@ -86,6 +88,7 @@
     "zod": "^4.1.12"
   },
   "devDependencies": {
+    "@aws-sdk/client-s3": "^3.1141.0",
     "@builder.io/vite-plugin-jsx-loc": "^0.1.1",
     "@tailwindcss/typography": "^0.5.15",
     "@tailwindcss/vite": "^4.1.3",

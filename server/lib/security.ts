@@ -63,7 +63,7 @@ const globalLimiter = rateLimit({
 const corsOrigin =
   process.env.CORS_ORIGIN ??
   process.env.CORS_ORIGINS ??
-  (process.env.NODE_ENV === "production" ? "" : "http://localhost:3000");
+  (process.env.NODE_ENV === "production" ? "" : "http://localhost:3000,http://localhost:5173");
 
 // In production the origin is never "*", so only origins explicitly listed are
 // reflected back to the client. A comma-separated list is accepted.

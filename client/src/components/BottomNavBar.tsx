@@ -5,6 +5,8 @@ export type NavTab = "hq" | "reps" | "vault" | "feed" | "profile";
 interface BottomNavBarProps {
   activeTab: NavTab;
   onSelectTab: (tab: NavTab) => void;
+  /** Limit the bar to these tabs (all by default). */
+  tabs?: NavTab[];
 }
 
 const navItems: Array<{ id: NavTab; label: string; icon: typeof HomeIcon }> = [
@@ -15,10 +17,15 @@ const navItems: Array<{ id: NavTab; label: string; icon: typeof HomeIcon }> = [
   { id: "profile", label: "Profile", icon: UserRound },
 ];
 
-export function BottomNavBar({ activeTab, onSelectTab }: BottomNavBarProps) {
+export function BottomNavBar({ activeTab, onSelectTab, tabs }: BottomNavBarProps) {
+  const items = navItems.filter(({ id }) => !tabs || tabs.includes(id));
   return (
-    <nav className="bottom-nav" aria-label="Primary Mobile Navigation">
-      {navItems.map(({ id, label, icon: Icon }) => {
+    <nav
+      className="bottom-nav"
+      aria-label="Primary Mobile Navigation"
+      style={{ gridTemplateColumns: `repeat(${items.length}, 1fr)` }}
+    >
+      {items.map(({ id, label, icon: Icon }) => {
         const isActive = activeTab === id;
         return (
           <button

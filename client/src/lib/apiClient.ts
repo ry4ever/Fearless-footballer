@@ -1,114 +1,157 @@
 import type {
+  AthleteProgress,
   AuthTokenSet,
+  BetaUserRole,
   CaregiverDashboardPayload,
-  PairingLink,
   CompletionSyncResponse,
+  PairingApprovalResponse,
+  PairingClaimResponse,
   PairingCodeResponse,
+  PairingLink,
+  PairingRelationship,
+  PairingStatusResponse,
+  PlaybackEventRequest,
   RegisterAccountRequest,
   SessionCompletionRequest,
-  SessionPackage,
+  SessionRetrieveResponse,
   UserAccount,
 } from "@shared/types";
 
-const API_BASE_URL =
-  (typeof import.meta !== "undefined" && (import.meta as any).env?.VITE_API_URL) ||
-  (typeof process !== "undefined" && process.env?.VITE_API_URL) ||
-  (typeof window !== "undefined" && window.location.hostname !== "localhost" ? "" : "http://localhost:5000");
+/**
+ * API base URL. Empty means same origin: in production Vercel rewrites the
+ * API paths to the backend, and in development the Vite dev server proxies
+ * them (see vite.config.ts). Set VITE_API_URL to call another origin.
+ */
+const API_BASE_URL: string = import.meta.env.VITE_API_URL ?? "";
+
+const ACCESS_KEY = "fearless_access_token";
+const REFRESH_KEY = "fearless_refresh_token";
+const USER_KEY = "fearless_user";
+
+export class ApiError extends Error {
+  constructor(
+    message: string,
+    public readonly status: number,
+  ) {
+    super(message);
+    this.name = "ApiError";
+  }
+}
+
+function readStorage(key: string): string | null {
+  try {
+    return localStorage.getItem(key);
+  } catch {
+    return null;
+  }
+}
+
+function writeStorage(key: string, value: string | null) {
+  try {
+    if (value === null) localStorage.removeItem(key);
+    else localStorage.setItem(key, value);
+  } catch {
+    // Storage unavailable (private mode); the session just won't survive a reload.
+  }
+}
+
+type SessionListener = (user: UserAccount | null) => void;
 
 class ApiClient {
-  private accessToken: string | null = null;
-  private refreshTokenValue: string | null = null;
+  private accessToken: string | null = readStorage(ACCESS_KEY);
+  private refreshTokenValue: string | null = readStorage(REFRESH_KEY);
   private refreshPromise: Promise<AuthTokenSet | null> | null = null;
+  private listeners = new Set<SessionListener>();
 
-  constructor() {
-    this.accessToken = localStorage.getItem("fearless_access_token");
-    this.refreshTokenValue = localStorage.getItem("fearless_refresh_token");
-  }
-
-  public setTokens(tokens: AuthTokenSet | null) {
-    if (tokens) {
-      this.accessToken = tokens.accessToken;
-      this.refreshTokenValue = tokens.refreshToken;
-      localStorage.setItem("fearless_access_token", tokens.accessToken);
-      localStorage.setItem("fearless_refresh_token", tokens.refreshToken);
-    } else {
-      this.accessToken = null;
-      this.refreshTokenValue = null;
-      localStorage.removeItem("fearless_access_token");
-      localStorage.removeItem("fearless_refresh_token");
+  /** The signed-in account saved at sign-in; the API has no "who am I" endpoint. */
+  public getStoredUser(): UserAccount | null {
+    const raw = readStorage(USER_KEY);
+    if (!raw || !this.refreshTokenValue) return null;
+    try {
+      return JSON.parse(raw) as UserAccount;
+    } catch {
+      return null;
     }
   }
 
-  public getAccessToken(): string | null {
-    return this.accessToken;
+  /** Called with null when the session ends, including an expired refresh token. */
+  public onSessionChange(listener: SessionListener): () => void {
+    this.listeners.add(listener);
+    return () => this.listeners.delete(listener);
   }
 
-  public isAuthenticated(): boolean {
-    return !!this.accessToken;
+  private setTokens(tokens: AuthTokenSet | null) {
+    this.accessToken = tokens?.accessToken ?? null;
+    this.refreshTokenValue = tokens?.refreshToken ?? null;
+    writeStorage(ACCESS_KEY, this.accessToken);
+    writeStorage(REFRESH_KEY, this.refreshTokenValue);
+  }
+
+  private startSession(user: UserAccount, tokens: AuthTokenSet) {
+    this.setTokens(tokens);
+    writeStorage(USER_KEY, JSON.stringify(user));
+    this.listeners.forEach((listener) => listener(user));
+  }
+
+  private endSession() {
+    this.setTokens(null);
+    writeStorage(USER_KEY, null);
+    this.listeners.forEach((listener) => listener(null));
   }
 
   private async request<T>(
     endpoint: string,
     options: RequestInit = {},
     requiresAuth = true,
-    isRetry = false
+    isRetry = false,
   ): Promise<T> {
-    const url = `${API_BASE_URL}${endpoint}`;
     const headers: Record<string, string> = {
       "Content-Type": "application/json",
       ...(options.headers as Record<string, string>),
     };
-
     if (requiresAuth && this.accessToken) {
-      headers["Authorization"] = `Bearer ${this.accessToken}`;
+      headers.Authorization = `Bearer ${this.accessToken}`;
     }
 
+    let response: Response;
     try {
-      const response = await fetch(url, { ...options, headers });
-
-      if (response.status === 401 && requiresAuth && !isRetry && this.refreshTokenValue) {
-        // Attempt token refresh on 401
-        const newTokens = await this.refreshTokens();
-        if (newTokens) {
-          return this.request<T>(endpoint, options, requiresAuth, true);
-        }
-      }
-
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({ error: "HTTP Error " + response.status }));
-        throw new Error(errorData.error || `Request failed with status ${response.status}`);
-      }
-
-      if (response.status === 204) {
-        return {} as T;
-      }
-
-      return await response.json();
-    } catch (err: any) {
-      if (err.name === "TypeError" && err.message.includes("fetch")) {
-        throw new Error("Network connection error. Server unreachable.");
-      }
-      throw err;
+      response = await fetch(`${API_BASE_URL}${endpoint}`, { ...options, headers });
+    } catch {
+      throw new ApiError("Can't reach Fearless right now. Check your connection and try again.", 0);
     }
+
+    if (response.status === 401 && requiresAuth && !isRetry && this.refreshTokenValue) {
+      const refreshed = await this.refreshTokens();
+      if (refreshed) return this.request<T>(endpoint, options, requiresAuth, true);
+    }
+
+    if (!response.ok) {
+      const body = await response.json().catch(() => null);
+      const message = typeof body?.error === "string" ? body.error : `Request failed (${response.status})`;
+      throw new ApiError(message, response.status);
+    }
+
+    if (response.status === 204) return undefined as T;
+    return (await response.json()) as T;
   }
 
-  private async refreshTokens(): Promise<AuthTokenSet | null> {
+  private refreshTokens(): Promise<AuthTokenSet | null> {
     if (this.refreshPromise) return this.refreshPromise;
-    if (!this.refreshTokenValue) return null;
+    const refreshToken = this.refreshTokenValue;
+    if (!refreshToken) return Promise.resolve(null);
 
     this.refreshPromise = (async () => {
       try {
         const res = await fetch(`${API_BASE_URL}/auth/refresh`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ refreshToken: this.refreshTokenValue }),
+          body: JSON.stringify({ refreshToken }),
         });
-
         if (!res.ok) {
-          this.setTokens(null);
+          // Only end the session if nothing replaced the token meanwhile.
+          if (this.refreshTokenValue === refreshToken) this.endSession();
           return null;
         }
-
         // The server returns the rotated token set directly, not wrapped in { tokens }.
         const tokens = (await res.json()) as AuthTokenSet;
         this.setTokens(tokens);
@@ -124,73 +167,105 @@ class ApiClient {
     return this.refreshPromise;
   }
 
-  // --- Auth API ---
-  public async register(req: RegisterAccountRequest): Promise<{ user: UserAccount; tokens: AuthTokenSet }> {
-    const data = await this.request<{ user: UserAccount; tokens: AuthTokenSet }>("/auth/register", {
-      method: "POST",
-      body: JSON.stringify(req),
-    }, false);
-    this.setTokens(data.tokens);
-    return data;
+  // --- Auth ---
+  public async register(req: RegisterAccountRequest): Promise<UserAccount> {
+    const data = await this.request<{ user: UserAccount; tokens: AuthTokenSet }>(
+      "/auth/register",
+      { method: "POST", body: JSON.stringify(req) },
+      false,
+    );
+    this.startSession(data.user, data.tokens);
+    return data.user;
   }
 
-  public async signIn(email: string, password: string, role: "athlete" | "caregiver"): Promise<{ user: UserAccount; tokens: AuthTokenSet }> {
-    const data = await this.request<{ user: UserAccount; tokens: AuthTokenSet }>("/auth/sign-in", {
-      method: "POST",
-      body: JSON.stringify({ role, email, password }),
-    }, false);
-    this.setTokens(data.tokens);
-    return data;
+  public async signIn(email: string, password: string, role: BetaUserRole): Promise<UserAccount> {
+    const data = await this.request<{ user: UserAccount; tokens: AuthTokenSet }>(
+      "/auth/sign-in",
+      { method: "POST", body: JSON.stringify({ role, email, password }) },
+      false,
+    );
+    this.startSession(data.user, data.tokens);
+    return data.user;
   }
 
-  public async logout(): Promise<void> {
-    if (this.accessToken) {
-      await this.request<void>("/auth/logout", { method: "POST" }).catch(() => {});
-    }
-    this.setTokens(null);
+  /** Tokens are stateless on the server, so signing out is local. */
+  public signOut() {
+    this.endSession();
   }
 
-  // --- Pairing API ---
-  public async createPairingCode(): Promise<PairingCodeResponse> {
+  public async deleteAccount(): Promise<void> {
+    await this.request<void>("/auth/account", {
+      method: "DELETE",
+      body: JSON.stringify({ confirmation: "DELETE_MY_ACCOUNT" }),
+    });
+    this.endSession();
+  }
+
+  // --- Pairing ---
+  public async getPairing(): Promise<PairingLink | null> {
+    const data = await this.request<PairingStatusResponse>("/auth/pairing");
+    return data.pairing;
+  }
+
+  public createPairingCode(): Promise<PairingCodeResponse> {
     return this.request<PairingCodeResponse>("/auth/pairing/code", { method: "POST" });
   }
 
-  public async claimPairingCode(code: string, relationship = "parent"): Promise<PairingLink> {
-    return this.request<PairingLink>("/auth/pairing/claim", {
+  public claimPairingCode(pairingCode: string, relationship: PairingRelationship): Promise<PairingClaimResponse> {
+    return this.request<PairingClaimResponse>("/auth/pairing/claim", {
       method: "POST",
-      body: JSON.stringify({ pairingCode: code, relationship, consentConfirmed: true }),
+      body: JSON.stringify({ pairingCode, relationship, consentConfirmed: true }),
     });
   }
 
-  public async approvePairingLink(linkId: string, approve: boolean): Promise<PairingLink> {
-    return this.request<PairingLink>(`/auth/pairing/link/${linkId}/approve`, {
+  public approvePairing(linkId: string, approved: boolean): Promise<PairingApprovalResponse> {
+    return this.request<PairingApprovalResponse>(`/auth/pairing/${encodeURIComponent(linkId)}/approve`, {
       method: "POST",
-      body: JSON.stringify({ approve }),
+      body: JSON.stringify({ approved }),
     });
   }
 
-  // --- Sessions API ---
-  public async getTodaySession(): Promise<SessionPackage> {
-    return this.request<SessionPackage>("/sessions/today");
+  /** Athlete ends an active caregiver link. */
+  public revokePairing(linkId: string): Promise<PairingApprovalResponse> {
+    return this.request<PairingApprovalResponse>(`/auth/pairing/${encodeURIComponent(linkId)}`, {
+      method: "DELETE",
+    });
   }
 
-  public async completeSession(req: SessionCompletionRequest, idempotencyKey: string): Promise<CompletionSyncResponse> {
-    return this.request<CompletionSyncResponse>(`/sessions/${req.sessionId}/complete`, {
+  /** Caregiver withdraws consent, ending the link. */
+  public revokeConsent(linkId: string): Promise<unknown> {
+    return this.request(`/auth/consent/${encodeURIComponent(linkId)}`, { method: "DELETE" });
+  }
+
+  // --- Sessions ---
+  public async getTodaySession() {
+    const data = await this.request<SessionRetrieveResponse>("/sessions/today");
+    return data.session;
+  }
+
+  /** Analytics only: failures are ignored so they never interrupt playback. */
+  public recordPlaybackEvent(sessionId: string, event: PlaybackEventRequest) {
+    this.request<void>(`/sessions/${encodeURIComponent(sessionId)}/events`, {
       method: "POST",
-      headers: { "Idempotency-Key": idempotencyKey },
+      body: JSON.stringify(event),
+    }).catch(() => undefined);
+  }
+
+  public completeSession(req: SessionCompletionRequest): Promise<CompletionSyncResponse> {
+    return this.request<CompletionSyncResponse>(`/sessions/${encodeURIComponent(req.sessionId)}/complete`, {
+      method: "POST",
+      headers: { "Idempotency-Key": req.idempotencyKey },
       body: JSON.stringify(req),
     });
   }
 
-  // --- Caregiver API ---
-  public async getCaregiverDashboard(athleteId: string): Promise<CaregiverDashboardPayload> {
-    return this.request<CaregiverDashboardPayload>(`/caregiver/athletes/${athleteId}/dashboard`);
+  // --- Progress ---
+  public getAthleteProgress(): Promise<AthleteProgress> {
+    return this.request<AthleteProgress>("/athlete/progress");
   }
 
-  // --- Account Privacy & Deletion ---
-  public async deleteAccount(): Promise<void> {
-    await this.request<void>("/auth/account", { method: "DELETE" });
-    this.setTokens(null);
+  public getCaregiverDashboard(athleteId: string): Promise<CaregiverDashboardPayload> {
+    return this.request<CaregiverDashboardPayload>(`/caregiver/athletes/${encodeURIComponent(athleteId)}/dashboard`);
   }
 }
 

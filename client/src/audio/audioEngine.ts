@@ -78,6 +78,35 @@ class AudioEngine {
     }
   }
 
+  /**
+   * Point the lock-screen / media-key controls at the current screen's player
+   * instead of the built-in soundscape, and show the real session title.
+   */
+  public configureMediaSession(
+    metadata: { title: string; artist: string },
+    handlers: { onPlay: () => void; onPause: () => void },
+  ) {
+    if (!("mediaSession" in navigator)) return;
+    try {
+      navigator.mediaSession.metadata = new MediaMetadata({
+        title: metadata.title,
+        artist: metadata.artist,
+        album: "Fearless HQ Mental Training",
+        artwork: [{ src: "/assets/fearless-logo.png", sizes: "512x512", type: "image/png" }],
+      });
+      navigator.mediaSession.setActionHandler("play", handlers.onPlay);
+      navigator.mediaSession.setActionHandler("pause", handlers.onPause);
+      navigator.mediaSession.setActionHandler("seekbackward", null);
+      navigator.mediaSession.setActionHandler("seekforward", null);
+    } catch {
+      // Ignore if MediaSession actions are restricted by browser
+    }
+  }
+
+  public setMediaSessionPlaying(playing: boolean) {
+    this.updateMediaSessionState(playing ? "playing" : "paused");
+  }
+
   private updateMediaSessionState(state: "playing" | "paused" | "none") {
     if ("mediaSession" in navigator) {
       navigator.mediaSession.playbackState = state;
@@ -141,6 +170,11 @@ class AudioEngine {
         this.droneOsc2.stop();
         this.droneOsc2.disconnect();
         this.droneOsc2 = null;
+      }
+      // Each start creates a new filter; drop the old one so they don't pile up.
+      if (this.filter) {
+        this.filter.disconnect();
+        this.filter = null;
       }
     } catch {
       // Ignore stop errors

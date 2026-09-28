@@ -37,7 +37,8 @@ COPY --from=builder /app/shared ./shared
 ENV NODE_ENV=production
 EXPOSE 3000
 
-# Apply pending database migrations on start (prisma/migrations), then serve.
-# Railway reaches its Postgres over the private network, so no public
-# database URL is needed. Already-applied migrations are skipped.
-CMD ["sh", "-c", "npx prisma migrate deploy && node dist/server/index.js"]
+# Apply pending database migrations on start (prisma/migrations), add the
+# sample session if nothing is published yet, then serve. Railway reaches its
+# Postgres over the private network, so no public database URL is needed.
+# Already-applied migrations are skipped.
+CMD ["sh", "-c", "npx prisma migrate deploy && npx tsx prisma/ensureSampleSession.ts && node dist/server/index.js"]

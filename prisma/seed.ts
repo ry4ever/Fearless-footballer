@@ -1,10 +1,10 @@
+import { pathToFileURL } from "node:url";
 import { PrismaClient, MindsetCategory } from "@prisma/client";
 import { sampleSessionPackage } from "../shared/sampleSession";
 
-const prisma = new PrismaClient();
-
-async function main() {
-  const session = await prisma.session.upsert({
+/** Create or refresh the built-in sample session. */
+export async function seedSampleSession(prisma: PrismaClient) {
+  return prisma.session.upsert({
     where: { slug: sampleSessionPackage.slug },
     update: {
       title: sampleSessionPackage.title,
@@ -71,15 +71,22 @@ async function main() {
       },
     },
   });
-
-  console.log(`Seeded session: ${session.title}`);
 }
 
-main()
-  .catch((error) => {
+async function main() {
+  const prisma = new PrismaClient();
+  try {
+    const session = await seedSampleSession(prisma);
+    console.log(`Seeded session: ${session.title}`);
+  } finally {
+    await prisma.$disconnect();
+  }
+}
+
+// Run only when executed directly (pnpm prisma:seed), not when imported.
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+  main().catch((error) => {
     console.error(error);
     process.exit(1);
-  })
-  .finally(async () => {
-    await prisma.$disconnect();
   });
+}

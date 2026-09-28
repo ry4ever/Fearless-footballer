@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { ArrowRight, Flame, Headphones } from "lucide-react";
 import type { AthleteProgress, SessionPackage } from "@shared/types";
 import { FearlessHeaderLogo } from "../components/icons/CustomIcons";
-import { apiClient } from "../lib/apiClient";
+import { ApiError, apiClient } from "../lib/apiClient";
 import { offlineQueue } from "../lib/offlineQueue";
 import { loadPlan } from "./plan";
 import { useSession } from "./session";
@@ -23,7 +23,8 @@ function greeting(now = new Date()) {
 export function LiveHQScreen({ onStartSession }: LiveHQScreenProps) {
   const { user } = useSession();
   const [progress, setProgress] = useState<AthleteProgress | null>(null);
-  const [session, setSession] = useState<SessionPackage | null>(null);
+  /** undefined while loading; null when no session is published. */
+  const [session, setSession] = useState<SessionPackage | null | undefined>(undefined);
   const [error, setError] = useState("");
   const [pending, setPending] = useState(() => (user ? offlineQueue.pendingCount(user.id) : 0));
   const plan = user ? loadPlan(user.id) : null;
@@ -33,7 +34,11 @@ export function LiveHQScreen({ onStartSession }: LiveHQScreenProps) {
     try {
       const [nextProgress, nextSession] = await Promise.all([
         apiClient.getAthleteProgress(),
-        apiClient.getTodaySession(),
+        // No published session is a normal state, not a failure: keep showing progress.
+        apiClient.getTodaySession().catch((error) => {
+          if (error instanceof ApiError && error.status === 404) return null;
+          throw error;
+        }),
       ]);
       setProgress(nextProgress);
       setSession(nextSession);
@@ -73,7 +78,7 @@ export function LiveHQScreen({ onStartSession }: LiveHQScreenProps) {
     );
   }
 
-  if (!progress || !session) {
+  if (!progress || session === undefined) {
     return (
       <div className="screen live-screen">
         <div className="live-center" aria-live="polite">
@@ -85,7 +90,6 @@ export function LiveHQScreen({ onStartSession }: LiveHQScreenProps) {
   }
 
   const score = Math.max(0, Math.min(100, progress.score));
-  const minutes = Math.round(session.defaultDurationSeconds / 60);
 
   return (
     <div className="screen hq-screen live-screen">
@@ -157,22 +161,30 @@ export function LiveHQScreen({ onStartSession }: LiveHQScreenProps) {
         </div>
       </section>
 
-      <section className="live-card" aria-label="Today's session">
-        <span className="eyebrow">TODAY'S OFF-PITCH TRAINING</span>
-        <h2>{session.title}</h2>
-        <p className="live-copy">{session.subtitle}</p>
-        <p className="live-note" style={{ textAlign: "left", marginTop: 8 }}>
-          <Headphones size={13} style={{ display: "inline", verticalAlign: "-2px" }} /> {minutes} min · with {session.mentor.name}
-        </p>
-        <button
-          type="button"
-          className="primary-button"
-          style={{ width: "100%", marginTop: 14 }}
-          onClick={() => onStartSession(session)}
-        >
-          {progress.lastRep.completedToday ? "Train again" : "Start training"} <ArrowRight size={18} />
-        </button>
-      </section>
+      {session ? (
+        <section className="live-card" aria-label="Today's session">
+          <span className="eyebrow">TODAY'S OFF-PITCH TRAINING</span>
+          <h2>{session.title}</h2>
+          <p className="live-copy">{session.subtitle}</p>
+          <p className="live-note" style={{ textAlign: "left", marginTop: 8 }}>
+            <Headphones size={13} style={{ display: "inline", verticalAlign: "-2px" }} /> {Math.round(session.defaultDurationSeconds / 60)} min · with {session.mentor.name}
+          </p>
+          <button
+            type="button"
+            className="primary-button"
+            style={{ width: "100%", marginTop: 14 }}
+            onClick={() => onStartSession(session)}
+          >
+            {progress.lastRep.completedToday ? "Train again" : "Start training"} <ArrowRight size={18} />
+          </button>
+        </section>
+      ) : (
+        <section className="live-card" aria-label="Today's session">
+          <span className="eyebrow">TODAY'S OFF-PITCH TRAINING</span>
+          <h2>No session available yet</h2>
+          <p className="live-copy">New training is on its way. Check back soon – your progress is saved.</p>
+        </section>
+      )}
 
       <section className="live-card" aria-label="Last 7 days">
         <span className="eyebrow">LAST 7 DAYS</span>

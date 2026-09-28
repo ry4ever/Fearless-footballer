@@ -29,6 +29,10 @@ export function AuthScreen() {
   async function submit(event: FormEvent) {
     event.preventDefault();
     setError("");
+    if (registering && (password.length < 8 || !/[A-Za-z]/.test(password) || !/\d/.test(password))) {
+      setError("Your password needs at least 8 characters, including a letter and a number.");
+      return;
+    }
     if (registering && !privacyAcknowledged) {
       setError("Please read and accept the privacy notice to continue.");
       return;

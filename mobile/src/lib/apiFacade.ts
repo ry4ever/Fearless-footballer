@@ -34,6 +34,7 @@ import {
   RegisterAccountRequest,
   RegisterAccountResponse,
   SessionCompletionRequest,
+  SessionLibraryResponse,
   SessionRetrieveResponse,
   SignInAccountRequest,
   UserAccount,
@@ -307,6 +308,19 @@ export function getApiFacade(dependencies?: {
         );
       }
       return localApi.getAthleteSession();
+    },
+
+    async getSessionLibrary(): Promise<SessionLibraryResponse> {
+      if (isProductionApi()) {
+        await assertSignedIn();
+        const result = await apiClient.getSessionLibrary(role!);
+        if (result.status === 200 && result.data) return result.data;
+        throw new LocalApiError(
+          result.error?.error ?? "Unable to load sessions.",
+          result.status,
+        );
+      }
+      return localApi.getSessionLibrary();
     },
 
     async recordPlaybackEvent(

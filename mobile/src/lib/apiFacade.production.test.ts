@@ -168,6 +168,29 @@ describe("apiFacade in production mode", () => {
     expect((await api.getOfflineQueueStatus()).pending).toBe(0);
   });
 
+  it("loads the session library with every recorded version", async () => {
+    await signInAthlete();
+    const library = {
+      sessions: [
+        {
+          id: "session_1",
+          slug: "better-final-ball",
+          title: "Better Final Ball",
+          audio: [{ mode: "relaxation", withMusic: false, url: "https://cdn/r.mp3", durationSeconds: 541 }],
+        },
+      ],
+      programmes: [{ slug: "p", title: "P", description: "", sessionIds: ["session_1"] }],
+    };
+    fetchMock.mockImplementation(async (url: string) =>
+      url.endsWith("/sessions") ? jsonResponse(library) : jsonResponse({ error: "unexpected" }, 500),
+    );
+
+    const result = await getApiFacade({ role: "athlete" }).getSessionLibrary();
+
+    expect(result.sessions[0]?.audio?.[0]?.durationSeconds).toBe(541);
+    expect(result.programmes[0]?.sessionIds).toEqual(["session_1"]);
+  });
+
   it("clears stored tokens when local state is reset", async () => {
     await signInAthlete();
     expect(secureValues.size).toBeGreaterThan(0);

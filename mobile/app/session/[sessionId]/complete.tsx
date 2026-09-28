@@ -26,9 +26,11 @@ import {
 } from "../../../src/ui";
 import type {
   ReflectionFeeling,
+  SessionAudioVariant,
   SessionCompletionRequest,
   SessionPackage,
 } from "../../../../shared/types";
+import { progressKey, variantFromParams } from "../../../src/lib/sessionVersions";
 import {
   formatClock,
   isCompletionEligible,
@@ -58,12 +60,13 @@ const feelings: Array<{
 ];
 
 function CompletionContent() {
-  const { sessionId } = useLocalSearchParams<{ sessionId: string }>();
+  const { sessionId, mode, music } = useLocalSearchParams<{ sessionId: string; mode?: string; music?: string }>();
   const router = useRouter();
   const network = useNetworkState();
   const { refresh } = useSession();
   const api = getApiFacade({ role: "athlete" });
   const [session, setSession] = useState<SessionPackage | null>(null);
+  const [variant, setVariant] = useState<SessionAudioVariant | null>(null);
   const [playedSeconds, setPlayedSeconds] = useState(0);
   const [feeling, setFeeling] = useState<ReflectionFeeling | null>(null);
   const [note, setNote] = useState("");
@@ -78,16 +81,21 @@ function CompletionContent() {
     let mounted = true;
     setLoading(true);
     setError(null);
-    Promise.all([api.getAthleteSession(), loadPlaybackProgress(sessionId)])
-      .then(([sessionResult, progress]) => {
+    api.getSessionLibrary()
+      .then(async (library) => {
         if (!mounted) return;
-        if (sessionResult.session.id !== sessionId) {
+        const found = library.sessions.find((item) => item.id === sessionId && !item.comingSoon);
+        if (!found) {
           router.replace("/athlete/home");
           return;
         }
-        const measured = measurePlaybackSeconds(progress?.playedIntervals ?? []);
-        setSession(sessionResult.session);
-        setPlayedSeconds(measured);
+        // The player saved progress for the recording that was played.
+        const chosen = variantFromParams(found, { mode, music });
+        const progress = await loadPlaybackProgress(progressKey(found.id, chosen));
+        if (!mounted) return;
+        setSession(found);
+        setVariant(chosen);
+        setPlayedSeconds(measurePlaybackSeconds(progress?.playedIntervals ?? []));
       })
       .catch((caught) => {
         if (!mounted) return;
@@ -103,7 +111,7 @@ function CompletionContent() {
     return () => {
       mounted = false;
     };
-  }, [router, sessionId]);
+  }, [router, sessionId, mode, music]);
 
   useEffect(() => {
     const reachable =
@@ -121,12 +129,10 @@ function CompletionContent() {
     };
   }, [network.isConnected, network.isInternetReachable]);
 
-  const thresholdSeconds = session
-    ? session.defaultDurationSeconds * 0.8
-    : 0;
-  const eligible = Boolean(
-    session && isCompletionEligible(playedSeconds, session.defaultDurationSeconds),
-  );
+  // The 80% rule is measured against the recording that was played.
+  const targetSeconds = variant?.durationSeconds ?? session?.defaultDurationSeconds ?? 0;
+  const thresholdSeconds = targetSeconds * 0.8;
+  const eligible = Boolean(session && isCompletionEligible(playedSeconds, targetSeconds));
 
   async function submitCompletion() {
     if (!session || !feeling || !eligible) return;
@@ -134,15 +140,14 @@ function CompletionContent() {
     setError("");
     setSavedOffline(false);
     try {
-      const idempotencyKey = await getOrCreatePendingCompletionKey(session.id);
+      const recordingId = progressKey(session.id, variant);
+      const idempotencyKey = await getOrCreatePendingCompletionKey(recordingId);
       const request: SessionCompletionRequest = {
         sessionId: session.id,
         sessionVersion: session.version,
-        mode: "interactive",
-        completionDurationSeconds: Math.min(
-          Math.round(playedSeconds),
-          session.defaultDurationSeconds,
-        ),
+        mode: variant?.mode ?? "interactive",
+        ...(variant ? { withMusic: variant.withMusic } : {}),
+        completionDurationSeconds: Math.min(Math.round(playedSeconds), targetSeconds),
         completedAt: new Date().toISOString(),
         reflection: {
           feeling,
@@ -154,7 +159,7 @@ function CompletionContent() {
       const queueStatus = await api.getOfflineQueueStatus();
       setPendingCompletions(queueStatus.pending);
       if (queueStatus.pending === 0) {
-        await clearPendingCompletionKey(session.id);
+        await clearPendingCompletionKey(recordingId);
       } else {
         setSavedOffline(true);
       }

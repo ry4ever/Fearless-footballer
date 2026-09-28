@@ -11,7 +11,6 @@ import {
 } from "react-native";
 import { StatusBar } from "expo-status-bar";
 import type { ReactNode } from "react";
-import type { SessionPackage } from "../../../shared/types";
 
 export const colors = {
   background: "#050A19",
@@ -276,23 +275,6 @@ export function PairingCodeDisplay({
   );
 }
 
-export function SessionMetadataCard({ session }: { session: SessionPackage }) {
-  return (
-    <View style={styles.sessionCard} testID="session-metadata-card">
-      <Text style={styles.sessionEyebrow}>ONE BETA SESSION</Text>
-      <Text style={styles.sessionTitle}>{session.title}</Text>
-      <Text style={styles.sessionSubtitle}>{session.subtitle}</Text>
-      <View style={styles.sessionMetaRow}>
-        <Text style={styles.sessionMeta}>{session.category}</Text>
-        <Text style={styles.sessionMeta}>
-          {Math.round(session.defaultDurationSeconds / 60)} min
-        </Text>
-        <Text style={styles.sessionMeta}>{session.availableModes[0]}</Text>
-      </View>
-    </View>
-  );
-}
-
 export function ProgressBar({
   value,
   maximumValue = 100,
@@ -525,44 +507,6 @@ const styles = StyleSheet.create({
     marginVertical: 12,
   },
   codeExpiry: { color: colors.muted, fontSize: 13 },
-  sessionCard: {
-    borderWidth: 1,
-    borderColor: colors.line,
-    backgroundColor: colors.card,
-    borderRadius: 18,
-    padding: 18,
-    marginBottom: 16,
-  },
-  sessionEyebrow: {
-    color: colors.magenta,
-    fontSize: 11,
-    fontWeight: "800",
-    letterSpacing: 1,
-    marginBottom: 8,
-  },
-  sessionTitle: {
-    color: colors.white,
-    fontSize: 23,
-    fontWeight: "900",
-    marginBottom: 6,
-  },
-  sessionSubtitle: { color: colors.muted, fontSize: 14, lineHeight: 21 },
-  sessionMetaRow: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    marginTop: 14,
-    gap: 8,
-  },
-  sessionMeta: {
-    color: colors.cyan,
-    fontSize: 12,
-    fontWeight: "700",
-    borderWidth: 1,
-    borderColor: colors.line,
-    borderRadius: 999,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-  },
   privacyNotice: {
     borderWidth: 1,
     borderColor: colors.line,

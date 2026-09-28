@@ -383,6 +383,20 @@ describe.skipIf(!process.env.DATABASE_URL)("Phase 2 Security Integration Tests",
       expect(reapprove.status).toBe(200);
       expect((await reapprove.json()).status).toBe("active");
 
+      // Each side can read the current link, which is how the other device learns about it.
+      const pairingFor = async (token: string) =>
+        (
+          await (
+            await fetch(`${baseUrl}/auth/pairing`, { headers: { Authorization: `Bearer ${token}` } })
+          ).json()
+        ).pairing;
+      const athletePairing = await pairingFor(athleteAccess);
+      expect(athletePairing.status).toBe("active");
+      expect(athletePairing.consentStatus).toBe("granted");
+      expect(athletePairing.athleteId).toBe(athleteData.user.id);
+      expect((await pairingFor(caregiverA)).id).toBe(athletePairing.id);
+      expect(await pairingFor(caregiverB)).toBeNull();
+
       // Completion metrics include the rep just recorded; retries are idempotent.
       const session = await prisma.session.findFirstOrThrow({ where: { isPublished: true } });
       const completion = await completeSession(athleteAccess, session.id, `repair-${stamp}`);

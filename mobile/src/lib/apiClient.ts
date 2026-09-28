@@ -26,7 +26,7 @@ import type {
   SessionRetrieveResponse,
   SignInAccountRequest,
 } from "../../../shared/types";
-import type { AthleteProgress, UserAccount } from "../../../shared/types";
+import type { AthleteProgress, PairingStatusResponse, UserAccount } from "../../../shared/types";
 import {
   loadSessionState,
   saveSessionState,
@@ -235,6 +235,14 @@ async function performRefresh(role: BetaUserRole, refreshToken: string): Promise
   } catch {
     return null;
   }
+}
+
+/**
+ * A 4xx the client can't fix by retrying (e.g. 422 too short, 404 session
+ * retired). Auth, timeout, and rate-limit responses stay retryable.
+ */
+function isPermanentRejection(status: number): boolean {
+  return status >= 400 && status < 500 && ![401, 408, 429].includes(status);
 }
 
 function computeBackoff(attempt: number): number {
@@ -478,6 +486,13 @@ export const apiClient = {
     );
   },
 
+  async getPairingStatus(role: BetaUserRole): Promise<ApiResult<PairingStatusResponse>> {
+    return apiRequest<PairingStatusResponse>("GET", "/auth/pairing", undefined, {
+      role,
+      authenticated: true,
+    });
+  },
+
   async revokePairing(role: BetaUserRole, linkId: string): Promise<ApiResult<PairingApprovalResponse>> {
     return apiRequest<PairingApprovalResponse>("DELETE", `/auth/pairing/${linkId}`, undefined, {
       role,
@@ -608,6 +623,14 @@ export const apiClient = {
             },
           );
           synced += 1;
+        } else if (isPermanentRejection(result.status)) {
+          nextState = {
+            ...nextState,
+            offlineCompletionQueue: (nextState.offlineCompletionQueue ?? []).filter(
+              (queued) => queued.request.idempotencyKey !== item.request.idempotencyKey,
+            ),
+          };
+          failed += 1;
         } else {
           const error = result.error?.error ?? `Server returned ${result.status}`;
           nextState = updateOfflineCompletionQueueItem(

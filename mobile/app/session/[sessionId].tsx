@@ -207,17 +207,26 @@ function PlayerScreen({ session, api }: { session: SessionPackage; api: ReturnTy
     status.playing,
   ]);
 
+  // Read playback state from the status hook. Accessing the native
+  // `player.playing` getter can return a Java Integer on Android and crash
+  // Expo Go while the screen is being removed. Kept in a ref so the blur
+  // cleanup below doesn't re-run (and pause) on every play/pause change.
+  const playingRef = useRef(status.playing);
+  playingRef.current = status.playing;
+
   useFocusEffect(
     useCallback(() => {
       return () => {
-        // Read playback state from the status hook. Accessing the native
-        // `player.playing` getter can return a Java Integer on Android and
-        // crash Expo Go while the screen is being removed.
-        if (status.playing) player.pause();
+        if (playingRef.current) player.pause();
         persistProgress(lastTime.current, intervalsRef.current);
       };
-    }, [persistProgress, player, status.playing]),
+    }, [persistProgress, player]),
   );
+
+  /** Playback events are analytics only; they must never block the audio. */
+  function reportPlaybackEvent(event: PlaybackEventRequest) {
+    api.recordPlaybackEvent(session.id, event).catch(() => null);
+  }
 
   useEffect(() => {
     const subscription = AppState.addEventListener("change", (state) => {
@@ -232,17 +241,13 @@ function PlayerScreen({ session, api }: { session: SessionPackage; api: ReturnTy
     if (!status.isLoaded || status.duration <= 0) return;
     lastTime.current = clamp(status.currentTime, 0, duration);
     setFinished(false);
-    try {
-      await api.recordPlaybackEvent(session.id, {
-        eventType: "start",
-        mode: "interactive",
-        playbackPositionSeconds: lastTime.current,
-        clientTimestamp: new Date().toISOString(),
-      });
-      player.play();
-    } catch (error) {
-      setPlayerError(error instanceof Error ? error.message : "Unable to start playback.");
-    }
+    player.play();
+    reportPlaybackEvent({
+      eventType: "start",
+      mode: "interactive",
+      playbackPositionSeconds: lastTime.current,
+      clientTimestamp: new Date().toISOString(),
+    });
   }
 
   async function pause() {
@@ -254,17 +259,13 @@ function PlayerScreen({ session, api }: { session: SessionPackage; api: ReturnTy
     }
     lastTime.current = nextTime;
     persistProgress(nextTime, intervalsRef.current);
-    try {
-      await api.recordPlaybackEvent(session.id, {
-        eventType: "pause",
-        mode: "interactive",
-        playbackPositionSeconds: nextTime,
-        clientTimestamp: new Date().toISOString(),
-      });
-      player.pause();
-    } catch (error) {
-      setPlayerError(error instanceof Error ? error.message : "Unable to pause playback.");
-    }
+    player.pause();
+    reportPlaybackEvent({
+      eventType: "pause",
+      mode: "interactive",
+      playbackPositionSeconds: nextTime,
+      clientTimestamp: new Date().toISOString(),
+    });
   }
 
   async function seekTo(target: number) {
@@ -275,7 +276,7 @@ function PlayerScreen({ session, api }: { session: SessionPackage; api: ReturnTy
       await player.seekTo(nextTime);
       lastTime.current = nextTime;
       persistProgress(nextTime, intervalsRef.current);
-      await api.recordPlaybackEvent(session.id, {
+      reportPlaybackEvent({
         eventType: "seek",
         mode: "interactive",
         playbackPositionSeconds: nextTime,

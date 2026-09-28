@@ -29,6 +29,8 @@ import {
   type BetaUserRole,
   type CaregiverDashboardPayload,
   type OfflineQueueStatus,
+  type PairingLink,
+  type PairingStatusResponse,
   type PlaybackEventRequest,
   type RegisterAccountRequest,
   type RegisterAccountResponse,
@@ -875,6 +877,65 @@ async function revokeConsentHandler(req: Request, res: Response) {
     status: "revoked",
     revokedAt: updated.revokedAt?.toISOString(),
   });
+}
+
+const LINK_STATUS_PRIORITY = { ACTIVE: 0, PENDING: 1, REVOKED: 2 } as const;
+
+/**
+ * The pairing link that currently matters for the signed-in athlete or
+ * caregiver: an active link first, then one awaiting athlete approval, then
+ * the most recent revoked one. Unclaimed codes are not relationships and are
+ * never returned.
+ */
+async function getPairingStatusHandler(req: Request, res: Response) {
+  if (!req.auth) {
+    res.status(401).json({ error: "Authentication required" });
+    return;
+  }
+
+  let where;
+  if (req.auth.role === "athlete") {
+    const athlete = await prisma.athleteProfile.findUnique({ where: { userId: req.auth.userId } });
+    if (!athlete) {
+      res.status(404).json({ error: "Athlete profile not found" });
+      return;
+    }
+    where = { athleteId: athlete.id, caregiverUserId: { not: req.auth.userId }, consentedAt: { not: null } };
+  } else if (req.auth.role === "caregiver") {
+    where = { caregiverUserId: req.auth.userId };
+  } else {
+    res.status(403).json({ error: "Athlete or caregiver role is required" });
+    return;
+  }
+
+  const links = await prisma.caregiverLink.findMany({
+    where,
+    include: { athlete: { select: { userId: true } } },
+    orderBy: { updatedAt: "desc" },
+  });
+  const link = links.sort((a, b) => LINK_STATUS_PRIORITY[a.status] - LINK_STATUS_PRIORITY[b.status])[0];
+
+  const body: PairingStatusResponse = { pairing: null };
+  if (link) {
+    const pairing: PairingLink = {
+      id: link.id,
+      athleteId: link.athlete.userId,
+      caregiverUserId: link.caregiverUserId,
+      relationship: link.relationship === "guardian" ? "guardian" : "parent",
+      status:
+        link.status === "ACTIVE" ? "active" : link.status === "REVOKED" ? "revoked" : "pending_athlete_approval",
+      consentStatus:
+        link.status === "REVOKED" ? "revoked" : link.status === "ACTIVE" && link.coppaConsent ? "granted" : "pending",
+      consentPolicyVersion: link.consentPolicyVersion,
+      consentSource: link.consentSource,
+      consentedAt: link.consentedAt?.toISOString(),
+      consentRevokedAt: link.consentRevokedAt?.toISOString(),
+      athleteApprovedAt: link.athleteApprovedAt?.toISOString(),
+      revokedAt: link.revokedAt?.toISOString(),
+    };
+    body.pairing = pairing;
+  }
+  res.json(body);
 }
 
 async function refreshTokenHandler(req: Request, res: Response) {
@@ -1934,6 +1995,7 @@ app.post("/auth/password/reset-request", authLimiter, wrap(passwordResetRequestH
 app.post("/auth/password/reset", authLimiter, wrap(passwordResetConfirmHandler));
 app.delete("/auth/account", wrap(authenticate), wrap(deleteAccountHandler));
 app.post("/auth/age-gate", wrap(ageGateHandler));
+app.get("/auth/pairing", wrap(authenticate), wrap(getPairingStatusHandler));
 app.post("/auth/pairing/code", wrap(authenticate), requireRole("athlete"), wrap(createPairingCodeHandler));
 app.post("/auth/pairing/claim", wrap(authenticate), requireRole("caregiver"), pairingClaimLimiter, wrap(claimPairingCodeHandler));
 app.post("/auth/pairing/:linkId/approve", wrap(authenticate), requireRole("athlete"), wrap(approvePairingHandler));

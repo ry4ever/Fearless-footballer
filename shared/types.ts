@@ -224,6 +224,11 @@ export interface CompletionSyncResponse {
   weeklyProgress: WeeklyProgress;
 }
 
+export interface PairingStatusResponse {
+  /** The link that currently matters for this account, or null when unlinked. */
+  pairing: PairingLink | null;
+}
+
 export interface OfflineQueueStatus {
   pending: number;
   lastSyncedAt?: string;

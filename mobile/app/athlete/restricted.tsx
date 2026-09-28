@@ -1,10 +1,12 @@
+import { useState } from "react";
 import { Redirect, useRouter } from "expo-router";
 import { Brand, Button, PageTitle, PrivacyNotice, Screen, StatusCard } from "../../src/ui";
 import { useSession } from "../../src/session";
 
 export default function AthleteRestrictedScreen() {
   const router = useRouter();
-  const { state } = useSession();
+  const { state, syncPairing } = useSession();
+  const [checking, setChecking] = useState(false);
   const account = state?.athleteAccount;
 
   if (!account || !state?.hasTokens || account.role !== "athlete") {
@@ -46,6 +48,17 @@ export default function AthleteRestrictedScreen() {
           accessibilityLabel="Create athlete pairing code"
         />
       )}
+      <Button
+        label={checking ? "Checking…" : "Check again"}
+        variant="quiet"
+        disabled={checking}
+        onPress={async () => {
+          setChecking(true);
+          await syncPairing().catch(() => null);
+          setChecking(false);
+        }}
+        accessibilityLabel="Check for caregiver pairing updates"
+      />
       {active ? (
         <Button
           label="Open athlete home"

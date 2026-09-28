@@ -7,7 +7,7 @@ import {
   useState,
 } from "react";
 import type { PropsWithChildren } from "react";
-import { ActivityIndicator, Text, View } from "react-native";
+import { ActivityIndicator, AppState, Text, View } from "react-native";
 import { Redirect } from "expo-router";
 import { canAthleteAccessSession, canCaregiverAccessDashboard } from "./lib/sessionGuard";
 import {
@@ -16,7 +16,7 @@ import {
   signOutSession,
   type LoadedSessionState,
 } from "./lib/sessionStore";
-import { getApiFacade } from "./lib/apiFacade";
+import { getApiFacade, getSessionApiFacade } from "./lib/apiFacade";
 
 interface SessionContextValue {
   state: LoadedSessionState | null;
@@ -26,6 +26,8 @@ interface SessionContextValue {
   switchRole: (role: LoadedSessionState["currentRole"]) => Promise<LoadedSessionState>;
   reset: () => Promise<LoadedSessionState>;
   signOut: () => Promise<LoadedSessionState>;
+  /** Pull pairing changes made on another device, then reload local state. */
+  syncPairing: () => Promise<LoadedSessionState>;
 }
 
 const SessionContext = createContext<SessionContextValue | null>(null);
@@ -52,9 +54,22 @@ export function SessionProvider({ children }: PropsWithChildren) {
     }
   }, []);
 
-  useEffect(() => {
-    refresh().catch(() => null);
+  const syncPairing = useCallback(async () => {
+    const api = await getSessionApiFacade();
+    await api.syncPairing();
+    return refresh();
   }, [refresh]);
+
+  useEffect(() => {
+    // Show local state immediately, then pick up remote pairing changes.
+    refresh()
+      .then(() => syncPairing())
+      .catch(() => null);
+    const subscription = AppState.addEventListener("change", (appState) => {
+      if (appState === "active") syncPairing().catch(() => null);
+    });
+    return () => subscription.remove();
+  }, [refresh, syncPairing]);
 
   const switchRoleAction = useCallback(
     async (role: LoadedSessionState["currentRole"]) => {
@@ -80,8 +95,8 @@ export function SessionProvider({ children }: PropsWithChildren) {
   }, [refresh]);
 
   const value = useMemo(
-    () => ({ state, loading, error, refresh, switchRole: switchRoleAction, reset, signOut }),
-    [state, loading, error, refresh, switchRoleAction, reset, signOut],
+    () => ({ state, loading, error, refresh, switchRole: switchRoleAction, reset, signOut, syncPairing }),
+    [state, loading, error, refresh, switchRoleAction, reset, signOut, syncPairing],
   );
 
   return <SessionContext.Provider value={value}>{children}</SessionContext.Provider>;
@@ -95,7 +110,7 @@ export function useSession() {
 
 export function AthleteAccountGuard({ children }: PropsWithChildren) {
   const { state, loading } = useSession();
-  if (loading) return <SessionLoading />;
+  if (loading && !state) return <SessionLoading />;
 
   if (
     !state?.currentUser ||
@@ -109,7 +124,7 @@ export function AthleteAccountGuard({ children }: PropsWithChildren) {
 
 export function CaregiverAccountGuard({ children }: PropsWithChildren) {
   const { state, loading } = useSession();
-  if (loading) return <SessionLoading />;
+  if (loading && !state) return <SessionLoading />;
 
   if (
     !state?.currentUser ||
@@ -123,7 +138,7 @@ export function CaregiverAccountGuard({ children }: PropsWithChildren) {
 
 export function AthleteRouteGuard({ children }: PropsWithChildren) {
   const { state, loading } = useSession();
-  if (loading) return <SessionLoading />;
+  if (loading && !state) return <SessionLoading />;
 
   if (
     !state?.currentUser ||
@@ -140,7 +155,7 @@ export function AthleteRouteGuard({ children }: PropsWithChildren) {
 
 export function CaregiverRouteGuard({ children }: PropsWithChildren) {
   const { state, loading } = useSession();
-  if (loading) return <SessionLoading />;
+  if (loading && !state) return <SessionLoading />;
 
   if (
     !state?.currentUser ||

@@ -1,9 +1,17 @@
 FROM node:20-alpine AS builder
 
 WORKDIR /app
+# bcrypt downloads a prebuilt native binary during install and compiles from
+# source when none matches (musl/Alpine); these tools make that fallback work.
+# openssl lets Prisma pick the right query engine.
+RUN apk add --no-cache python3 make g++ openssl
 COPY package.json pnpm-lock.yaml ./
 COPY patches ./patches
+# pnpm 10 only runs dependency build scripts for packages listed in
+# package.json "pnpm.onlyBuiltDependencies" (bcrypt, Prisma, esbuild).
 RUN corepack enable && pnpm install --frozen-lockfile
+# Fail the build here, not at runtime, if bcrypt's native module is missing.
+RUN node -e "require('bcrypt').hashSync('build-check', 4)"
 
 COPY prisma ./prisma
 RUN npx prisma generate
@@ -16,7 +24,7 @@ RUN pnpm run server:build
 FROM node:20-alpine
 
 WORKDIR /app
-RUN apk add --no-cache libc6-compat
+RUN apk add --no-cache libc6-compat openssl
 RUN corepack enable
 
 COPY --from=builder /app/node_modules ./node_modules

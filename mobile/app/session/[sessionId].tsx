@@ -20,6 +20,7 @@ import {
   savePlaybackProgress,
 } from "../../src/lib/sessionStore";
 import { AthleteRouteGuard } from "../../src/session";
+import { WhyVideoLink, WhyVideoModal } from "../../src/ui/WhyVideo";
 import {
   Brand,
   Button,
@@ -148,6 +149,7 @@ function PlayerScreen({
   const [finished, setFinished] = useState(false);
   const [playerError, setPlayerError] = useState<string | null>(null);
   const [seeking, setSeeking] = useState(false);
+  const [showVideo, setShowVideo] = useState(false);
   const lastTime = useRef(0);
   const intervalsRef = useRef(intervals);
   const lastPlaying = useRef(false);
@@ -502,6 +504,18 @@ function PlayerScreen({
           Play through at least {formatClock(thresholdSeconds)} of the session. Seeking does not count skipped audio.
         </StatusCard>
       )}
+      {session.whyVideoUrl ? (
+        <WhyVideoLink
+          onPress={() => {
+            // Pause the session so Mark's video and voice don't overlap.
+            if (status.playing) void pause();
+            setShowVideo(true);
+          }}
+        />
+      ) : null}
+      {showVideo && session.whyVideoUrl ? (
+        <WhyVideoModal url={session.whyVideoUrl} onClose={() => setShowVideo(false)} />
+      ) : null}
       <PrivacyNotice />
     </Screen>
   );

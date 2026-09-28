@@ -21,6 +21,8 @@ export interface CatalogSession {
   audioSourceFolder?: string;
   /** Source file names per mode and music variant. */
   audio: Record<AudioMode, Record<MusicVariant, string>> | null;
+  /** Source file name of the "Why this works?" video, in the audio folder. */
+  video?: string;
   descriptionMarkdown: string | null;
 }
 
@@ -42,10 +44,16 @@ export interface ManifestEntry {
 
 export type MediaManifest = {
   sessions: Record<string, Partial<Record<AudioMode, Partial<Record<MusicVariant, ManifestEntry>>>>>;
+  /** "Why this works?" videos, by session slug (re-encoded MP4s). */
+  videos?: Record<string, ManifestEntry>;
 };
 
 export function mediaKey(slug: string, mode: AudioMode, variant: MusicVariant): string {
   return `audio/${slug}/${mode}-${variant === "music" ? "music" : "no-music"}.mp3`;
+}
+
+export function videoKey(slug: string): string {
+  return `video/${slug}/why-this-works.mp4`;
 }
 
 export function readCatalog(root: string): { sessions: CatalogSession[]; programmes: CatalogProgramme[] } {
@@ -65,6 +73,7 @@ export function readCatalog(root: string): { sessions: CatalogSession[]; program
       sortOrder: typeof meta.sortOrder === "number" ? meta.sortOrder : 1000,
       audioSourceFolder: meta.audioSourceFolder,
       audio: meta.audio ?? null,
+      video: typeof meta.video === "string" ? meta.video : undefined,
       descriptionMarkdown: existsSync(descriptionPath) ? playerFacing(readFileSync(descriptionPath, "utf8")) : null,
     });
   }

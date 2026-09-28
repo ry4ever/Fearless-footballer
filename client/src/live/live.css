@@ -203,3 +203,43 @@
 .version-bar .version-music { align-self: flex-start; align-items: center; font-weight: 600; }
 .version-bar .version-music input { width: 18px; height: 18px; margin-top: 0; }
 .version-bar .version-detail { margin: 0; text-align: left; }
+
+/* "Why this works?" video */
+.why-video-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 40px;
+  margin: 6px auto 0;
+  padding: 0 8px;
+  color: var(--cyan);
+  background: transparent;
+  font-size: 14px;
+  font-weight: 700;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+.why-video-dialog { position: relative; display: flex; justify-content: center; width: 100%; max-width: 420px; }
+.why-video-dialog video {
+  width: 100%;
+  max-height: 82vh;
+  border-radius: 16px;
+  background: #000;
+  aspect-ratio: 9 / 16;
+  object-fit: contain;
+}
+.why-video-close {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  z-index: 1;
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  color: #fff;
+  background: rgba(0, 0, 0, 0.55);
+  cursor: pointer;
+}

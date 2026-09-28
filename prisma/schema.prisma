@@ -114,6 +114,8 @@ model Session {
   descriptionMarkdown String?
   /// Listed in the library but not playable yet (no audio recorded).
   comingSoon          Boolean            @default(false)
+  /// "Why this works?" video: a media key or absolute URL.
+  videoUrl            String?
   sessionCompletions  SessionCompleted[]
   phases              SessionPhase[]
   prompts             SessionPrompt[]

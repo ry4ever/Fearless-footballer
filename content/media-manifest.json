@@ -1,0 +1,312 @@
+{
+  "sessions": {
+    "back-to-your-best": {
+      "interactive": {
+        "music": {
+          "key": "audio/back-to-your-best/interactive-music.mp3",
+          "bytes": 12205216,
+          "durationSeconds": 610,
+          "uploaded": false
+        },
+        "noMusic": {
+          "key": "audio/back-to-your-best/interactive-no-music.mp3",
+          "bytes": 12205216,
+          "durationSeconds": 610,
+          "uploaded": false
+        }
+      },
+      "guidance": {
+        "music": {
+          "key": "audio/back-to-your-best/guidance-music.mp3",
+          "bytes": 12005056,
+          "durationSeconds": 600,
+          "uploaded": false
+        },
+        "noMusic": {
+          "key": "audio/back-to-your-best/guidance-no-music.mp3",
+          "bytes": 12005056,
+          "durationSeconds": 600,
+          "uploaded": false
+        }
+      },
+      "relaxation": {
+        "music": {
+          "key": "audio/back-to-your-best/relaxation-music.mp3",
+          "bytes": 13365376,
+          "durationSeconds": 668,
+          "uploaded": false
+        },
+        "noMusic": {
+          "key": "audio/back-to-your-best/relaxation-no-music.mp3",
+          "bytes": 13285271,
+          "durationSeconds": 664,
+          "uploaded": false
+        }
+      }
+    },
+    "better-final-ball": {
+      "interactive": {
+        "music": {
+          "key": "audio/better-final-ball/interactive-music.mp3",
+          "bytes": 12205216,
+          "durationSeconds": 610,
+          "uploaded": false
+        },
+        "noMusic": {
+          "key": "audio/better-final-ball/interactive-no-music.mp3",
+          "bytes": 12205216,
+          "durationSeconds": 610,
+          "uploaded": false
+        }
+      },
+      "guidance": {
+        "music": {
+          "key": "audio/better-final-ball/guidance-music.mp3",
+          "bytes": 12205216,
+          "durationSeconds": 610,
+          "uploaded": false
+        },
+        "noMusic": {
+          "key": "audio/better-final-ball/guidance-no-music.mp3",
+          "bytes": 12205216,
+          "durationSeconds": 610,
+          "uploaded": false
+        }
+      },
+      "relaxation": {
+        "music": {
+          "key": "audio/better-final-ball/relaxation-music.mp3",
+          "bytes": 11885056,
+          "durationSeconds": 594,
+          "uploaded": false
+        },
+        "noMusic": {
+          "key": "audio/better-final-ball/relaxation-no-music.mp3",
+          "bytes": 10832896,
+          "durationSeconds": 541,
+          "uploaded": false
+        }
+      }
+    },
+    "defensive-aerial-duels": {
+      "interactive": {
+        "music": {
+          "key": "audio/defensive-aerial-duels/interactive-music.mp3",
+          "bytes": 12205216,
+          "durationSeconds": 610,
+          "uploaded": false
+        },
+        "noMusic": {
+          "key": "audio/defensive-aerial-duels/interactive-no-music.mp3",
+          "bytes": 12205216,
+          "durationSeconds": 610,
+          "uploaded": false
+        }
+      },
+      "guidance": {
+        "music": {
+          "key": "audio/defensive-aerial-duels/guidance-music.mp3",
+          "bytes": 12045500,
+          "durationSeconds": 602,
+          "uploaded": false
+        },
+        "noMusic": {
+          "key": "audio/defensive-aerial-duels/guidance-no-music.mp3",
+          "bytes": 12045500,
+          "durationSeconds": 602,
+          "uploaded": false
+        }
+      },
+      "relaxation": {
+        "music": {
+          "key": "audio/defensive-aerial-duels/relaxation-music.mp3",
+          "bytes": 13325500,
+          "durationSeconds": 666,
+          "uploaded": false
+        },
+        "noMusic": {
+          "key": "audio/defensive-aerial-duels/relaxation-no-music.mp3",
+          "bytes": 12805141,
+          "durationSeconds": 640,
+          "uploaded": false
+        }
+      }
+    },
+    "dominate-the-midfield": {
+      "interactive": {
+        "music": {
+          "key": "audio/dominate-the-midfield/interactive-music.mp3",
+          "bytes": 12205216,
+          "durationSeconds": 610,
+          "uploaded": false
+        },
+        "noMusic": {
+          "key": "audio/dominate-the-midfield/interactive-no-music.mp3",
+          "bytes": 12205216,
+          "durationSeconds": 610,
+          "uploaded": false
+        }
+      },
+      "guidance": {
+        "music": {
+          "key": "audio/dominate-the-midfield/guidance-music.mp3",
+          "bytes": 12005271,
+          "durationSeconds": 600,
+          "uploaded": false
+        },
+        "noMusic": {
+          "key": "audio/dominate-the-midfield/guidance-no-music.mp3",
+          "bytes": 12005271,
+          "durationSeconds": 600,
+          "uploaded": false
+        }
+      },
+      "relaxation": {
+        "music": {
+          "key": "audio/dominate-the-midfield/relaxation-music.mp3",
+          "bytes": 11885056,
+          "durationSeconds": 594,
+          "uploaded": false
+        },
+        "noMusic": {
+          "key": "audio/dominate-the-midfield/relaxation-no-music.mp3",
+          "bytes": 8965216,
+          "durationSeconds": 448,
+          "uploaded": false
+        }
+      }
+    },
+    "ice-cold-finisher": {
+      "interactive": {
+        "music": {
+          "key": "audio/ice-cold-finisher/interactive-music.mp3",
+          "bytes": 12205216,
+          "durationSeconds": 610,
+          "uploaded": false
+        },
+        "noMusic": {
+          "key": "audio/ice-cold-finisher/interactive-no-music.mp3",
+          "bytes": 12205216,
+          "durationSeconds": 610,
+          "uploaded": false
+        }
+      },
+      "guidance": {
+        "music": {
+          "key": "audio/ice-cold-finisher/guidance-music.mp3",
+          "bytes": 12205216,
+          "durationSeconds": 610,
+          "uploaded": false
+        },
+        "noMusic": {
+          "key": "audio/ice-cold-finisher/guidance-no-music.mp3",
+          "bytes": 12205216,
+          "durationSeconds": 610,
+          "uploaded": false
+        }
+      },
+      "relaxation": {
+        "music": {
+          "key": "audio/ice-cold-finisher/relaxation-music.mp3",
+          "bytes": 11885056,
+          "durationSeconds": 594,
+          "uploaded": false
+        },
+        "noMusic": {
+          "key": "audio/ice-cold-finisher/relaxation-no-music.mp3",
+          "bytes": 10005376,
+          "durationSeconds": 500,
+          "uploaded": false
+        }
+      }
+    },
+    "play-your-next-game": {
+      "interactive": {
+        "music": {
+          "key": "audio/play-your-next-game/interactive-music.mp3",
+          "bytes": 12205216,
+          "durationSeconds": 610,
+          "uploaded": false
+        },
+        "noMusic": {
+          "key": "audio/play-your-next-game/interactive-no-music.mp3",
+          "bytes": 12205216,
+          "durationSeconds": 610,
+          "uploaded": false
+        }
+      },
+      "guidance": {
+        "music": {
+          "key": "audio/play-your-next-game/guidance-music.mp3",
+          "bytes": 12205216,
+          "durationSeconds": 610,
+          "uploaded": false
+        },
+        "noMusic": {
+          "key": "audio/play-your-next-game/guidance-no-music.mp3",
+          "bytes": 12205216,
+          "durationSeconds": 610,
+          "uploaded": false
+        }
+      },
+      "relaxation": {
+        "music": {
+          "key": "audio/play-your-next-game/relaxation-music.mp3",
+          "bytes": 11885056,
+          "durationSeconds": 594,
+          "uploaded": false
+        },
+        "noMusic": {
+          "key": "audio/play-your-next-game/relaxation-no-music.mp3",
+          "bytes": 10205056,
+          "durationSeconds": 510,
+          "uploaded": false
+        }
+      }
+    },
+    "scanning-and-awareness": {
+      "interactive": {
+        "music": {
+          "key": "audio/scanning-and-awareness/interactive-music.mp3",
+          "bytes": 12205216,
+          "durationSeconds": 610,
+          "uploaded": false
+        },
+        "noMusic": {
+          "key": "audio/scanning-and-awareness/interactive-no-music.mp3",
+          "bytes": 12205216,
+          "durationSeconds": 610,
+          "uploaded": false
+        }
+      },
+      "guidance": {
+        "music": {
+          "key": "audio/scanning-and-awareness/guidance-music.mp3",
+          "bytes": 12205216,
+          "durationSeconds": 610,
+          "uploaded": false
+        },
+        "noMusic": {
+          "key": "audio/scanning-and-awareness/guidance-no-music.mp3",
+          "bytes": 12205216,
+          "durationSeconds": 610,
+          "uploaded": false
+        }
+      },
+      "relaxation": {
+        "music": {
+          "key": "audio/scanning-and-awareness/relaxation-music.mp3",
+          "bytes": 11885056,
+          "durationSeconds": 594,
+          "uploaded": false
+        },
+        "noMusic": {
+          "key": "audio/scanning-and-awareness/relaxation-no-music.mp3",
+          "bytes": 9805216,
+          "durationSeconds": 490,
+          "uploaded": false
+        }
+      }
+    }
+  }
+}

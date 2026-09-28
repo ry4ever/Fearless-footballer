@@ -33,12 +33,14 @@ COPY --from=builder /app/pnpm-lock.yaml ./pnpm-lock.yaml
 COPY --from=builder /app/dist/server ./dist/server
 COPY --from=builder /app/prisma ./prisma
 COPY --from=builder /app/shared ./shared
+# Session catalog (text only; audio is served from R2).
+COPY content ./content
 
 ENV NODE_ENV=production
 EXPOSE 3000
 
-# Apply pending database migrations on start (prisma/migrations), add the
-# sample session if nothing is published yet, then serve. Railway reaches its
-# Postgres over the private network, so no public database URL is needed.
-# Already-applied migrations are skipped.
-CMD ["sh", "-c", "npx prisma migrate deploy && npx tsx prisma/ensureSampleSession.ts && node dist/server/index.js"]
+# On start: apply pending migrations, sync the session catalog from content/,
+# add the sample session if nothing is published yet, then serve. Railway
+# reaches its Postgres over the private network, so no public database URL
+# is needed. Already-applied migrations are skipped.
+CMD ["sh", "-c", "npx prisma migrate deploy && npx tsx prisma/syncContent.ts && npx tsx prisma/ensureSampleSession.ts && node dist/server/index.js"]

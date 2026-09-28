@@ -421,6 +421,128 @@ describe.skipIf(!process.env.DATABASE_URL)("Phase 2 Security Integration Tests",
   );
 
   it(
+    "serves the session library and applies the 80% rule to the version played",
+    async () => {
+      const stamp = Date.now();
+      const athleteData = await (
+        await registerAthlete(`athlete-library-${stamp}@example.com`, "Password123", "2010-01-01")
+      ).json();
+      const token = athleteData.tokens.accessToken;
+      const caregiver = await (
+        await fetch(`${baseUrl}/auth/register`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            role: "caregiver",
+            email: `caregiver-library-${stamp}@example.com`,
+            password: "Password123",
+            privacyAcknowledged: true,
+          }),
+        })
+      ).json();
+      const athleteProfile = await prisma.athleteProfile.findUniqueOrThrow({ where: { userId: athleteData.user.id } });
+      await prisma.caregiverLink.create({
+        data: {
+          athleteId: athleteProfile.id,
+          caregiverUserId: caregiver.user.id,
+          relationship: "parent",
+          status: "ACTIVE",
+          coppaConsent: true,
+          consentedAt: new Date(),
+          athleteApprovedAt: new Date(),
+        },
+      });
+
+      const base = {
+        version: "1.0.0",
+        category: "PERFORMANCE" as const,
+        mentorName: "Mark Bowden",
+        mentorTitle: "Football Mentor",
+        transcriptText: "",
+      };
+      const playable = await prisma.session.create({
+        data: {
+          ...base,
+          slug: `library-playable-${stamp}`,
+          title: "Library Playable",
+          subtitle: "Playable test session",
+          defaultDuration: 600,
+          voiceStreamUrl: "audio/library/interactive-music.mp3",
+          isPublished: true,
+          sortOrder: -1,
+          focusArea: "Sharpen Your Game",
+          descriptionMarkdown: "## Who this is for\n\nTest.",
+          audio: {
+            create: [
+              { mode: "INTERACTIVE", withMusic: true, url: "audio/library/interactive-music.mp3", durationSeconds: 600 },
+              { mode: "RELAXATION", withMusic: false, url: "audio/library/relaxation-no-music.mp3", durationSeconds: 300 },
+            ],
+          },
+        },
+      });
+      const soon = await prisma.session.create({
+        data: {
+          ...base,
+          slug: `library-soon-${stamp}`,
+          title: "Library Coming Soon",
+          subtitle: "",
+          defaultDuration: 600,
+          voiceStreamUrl: "",
+          isPublished: false,
+          comingSoon: true,
+        },
+      });
+      await prisma.programme.create({
+        data: {
+          slug: `library-programme-${stamp}`,
+          title: "Library Programme",
+          description: "Test programme",
+          sessions: { create: [{ sessionId: playable.id, position: 1 }, { sessionId: soon.id, position: 2 }] },
+        },
+      });
+
+      const library = await (await fetch(`${baseUrl}/sessions`, { headers: { Authorization: `Bearer ${token}` } })).json();
+      const listed = library.sessions.find((item: { id: string }) => item.id === playable.id);
+      expect(listed.audio).toHaveLength(2);
+      expect(listed.availableModes).toEqual(["interactive", "relaxation"]);
+      expect(listed.focusArea).toBe("Sharpen Your Game");
+      const listedSoon = library.sessions.find((item: { id: string }) => item.id === soon.id);
+      expect(listedSoon.comingSoon).toBe(true);
+      expect(listedSoon.audio).toBeUndefined();
+      const programme = library.programmes.find((item: { slug: string }) => item.slug === `library-programme-${stamp}`);
+      expect(programme.sessionIds).toEqual([playable.id, soon.id]);
+
+      const complete = (mode: string, withMusic: boolean, seconds: number, key: string) =>
+        fetch(`${baseUrl}/sessions/${playable.id}/complete`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}`, "Idempotency-Key": key },
+          body: JSON.stringify({
+            sessionId: playable.id,
+            sessionVersion: "1.0.0",
+            mode,
+            withMusic,
+            completionDurationSeconds: seconds,
+            completedAt: new Date().toISOString(),
+            idempotencyKey: key,
+          }),
+        });
+      // 250s is under 80% of the 600s interactive version…
+      expect((await complete("interactive", true, 250, `lib-a-${stamp}`)).status).toBe(422);
+      // …a version that wasn't recorded is rejected…
+      expect((await complete("guidance", true, 500, `lib-b-${stamp}`)).status).toBe(422);
+      // …and 250s is enough for the 300s relaxation version.
+      const relaxed = await complete("relaxation", false, 250, `lib-c-${stamp}`);
+      expect(relaxed.status).toBe(200);
+      const stored = await prisma.sessionCompleted.findUniqueOrThrow({ where: { idempotencyKey: `lib-c-${stamp}` } });
+      expect(stored.mode).toBe("RELAXATION");
+
+      const progress = await (await fetch(`${baseUrl}/athlete/progress`, { headers: { Authorization: `Bearer ${token}` } })).json();
+      expect(progress.lastRep.title).toBe("Library Playable");
+    },
+    { timeout: 120000 }
+  );
+
+  it(
     "caregiver dashboard returns aggregate data only (no private reflections)",
     async () => {
       // Setup athlete + caregiver + active link (reuse flow)

@@ -22,12 +22,12 @@ import {
 import { AthleteRouteGuard } from "../../src/session";
 import { WhyVideoLink, WhyVideoModal } from "../../src/ui/WhyVideo";
 import {
-  Brand,
   Button,
   PageTitle,
   PrivacyNotice,
   ProgressBar,
   Screen,
+  Wordmark,
   StatusCard,
   colors,
 } from "../../src/ui";
@@ -394,7 +394,7 @@ function PlayerScreen({
 
   return (
     <Screen testID="session-player-screen">
-      <Brand compact />
+      <Wordmark />
       <Pressable
         accessibilityLabel="Back to athlete home"
         accessibilityRole="button"

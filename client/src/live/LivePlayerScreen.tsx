@@ -10,6 +10,7 @@ import type {
   SessionPackage,
 } from "@shared/types";
 import { audioEngine } from "../audio/audioEngine";
+import { FearlessWordmark } from "../components/icons/CustomIcons";
 import { apiClient } from "../lib/apiClient";
 import { isRetryableError, offlineQueue } from "../lib/offlineQueue";
 import { useSession } from "./session";
@@ -161,7 +162,6 @@ function PlayerCore({ session, variant, versionBar, onBack, onComplete }: Player
   const [note, setNote] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState("");
-  const [avatarFailed, setAvatarFailed] = useState(false);
   const [showVideo, setShowVideo] = useState(false);
 
   const voiceRef = useRef<HTMLAudioElement | null>(null);
@@ -389,10 +389,8 @@ function PlayerCore({ session, variant, versionBar, onBack, onComplete }: Player
         <button type="button" className="back-button" onClick={onBack} aria-label="Back to HQ">
           <ArrowLeft size={20} />
         </button>
-        <div className="brand-wordmark-centered">
-          <span>FEAR</span>
-          <span className="brand-cut">A</span>
-          <span>LESS</span>
+        <div style={{ display: "flex" }}>
+          <FearlessWordmark height={26} />
         </div>
         {variant ? (
           <span style={{ width: 42 }} aria-hidden="true" />
@@ -412,18 +410,6 @@ function PlayerCore({ session, variant, versionBar, onBack, onComplete }: Player
       <main className="player-body">
         <div className="player-title-block">
           <h1 className="player-main-title">{session.title}</h1>
-        </div>
-
-        <div className="mentor-row-compact">
-          {session.mentor.avatarUrl && !avatarFailed && (
-            <div className="mentor-compact-avatar">
-              <img src={session.mentor.avatarUrl} alt="" className="mentor-avatar-img" onError={() => setAvatarFailed(true)} />
-            </div>
-          )}
-          <div className="mentor-compact-info">
-            <span className="coach-name">{session.mentor.name}</span>
-            <span className="coach-tagline">{session.mentor.title}</span>
-          </div>
         </div>
 
         {phases.length > 0 && (

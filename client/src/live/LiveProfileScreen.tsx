@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { FearlessHeaderLogo } from "../components/icons/CustomIcons";
+import { FearlessWordmark } from "../components/icons/CustomIcons";
 import { apiClient } from "../lib/apiClient";
 import { AccountActions } from "./AccountActions";
 import { loadPlan } from "./plan";
@@ -32,12 +32,14 @@ export function LiveProfileScreen({ onEditPlan }: LiveProfileScreenProps) {
   }
 
   return (
-    <div className="screen live-screen">
-      <FearlessHeaderLogo subtitle="HQ" size="md" />
-      <div>
-        <span className="eyebrow">PROFILE</span>
-        <h1 className="live-title">{user?.displayName}</h1>
-      </div>
+    <div className="screen live-screen hq2-screen">
+      <FearlessWordmark />
+      <section className="hq2-hello hq2-page-title">
+        <p>{user?.displayName}</p>
+        <h1>
+          <span>More</span>
+        </h1>
+      </section>
 
       <section className="live-card" aria-label="Training plan">
         <span className="eyebrow">YOUR PLAN</span>

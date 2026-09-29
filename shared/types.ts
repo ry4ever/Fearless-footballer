@@ -286,6 +286,10 @@ export interface AthleteProgress extends ComposureMetrics {
     completedAt: string;
     completedToday: boolean;
   };
+  /** Every session the athlete has completed at least once. */
+  completedSessionIds?: string[];
+  /** Sessions completed today, in the athlete's timezone. */
+  completedTodaySessionIds?: string[];
   moodTrend: {
     status: string;
     subtitle: string;

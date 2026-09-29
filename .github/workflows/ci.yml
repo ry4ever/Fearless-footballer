@@ -58,12 +58,13 @@ jobs:
         run: pnpm install --frozen-lockfile
         working-directory: .
 
-      - name: Type check
-        run: pnpm run check
-        working-directory: .
-
+      # Type-checking needs the generated Prisma client.
       - name: Generate Prisma Client
         run: pnpm prisma:generate
+        working-directory: .
+
+      - name: Type check
+        run: pnpm run check
         working-directory: .
 
       - name: Apply versioned Prisma migrations

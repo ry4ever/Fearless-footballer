@@ -8,6 +8,9 @@ on:
 jobs:
   backend-deploy:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
     steps:
       - uses: actions/checkout@v4
 
@@ -21,13 +24,15 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Build and push multi-arch backend Docker image
+      - name: Build and push backend Docker image
         uses: docker/build-push-action@v5
         with:
           context: .
           file: ./server/Dockerfile
           push: true
-          platforms: linux/amd64,linux/arm64
+          # amd64 only: the servers are x86, and building arm64 under QEMU
+          # emulation failed fetching Alpine packages.
+          platforms: linux/amd64
           tags: |
             ghcr.io/${{ github.repository_owner }}/fearless-footballer-backend:${{ github.sha }}
             ghcr.io/${{ github.repository_owner }}/fearless-footballer-backend:latest
@@ -41,14 +46,16 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # pnpm must exist before setup-node can cache its store.
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: 20.x
           cache: 'pnpm'
-
-      - name: Enable corepack
-        run: corepack enable
+          cache-dependency-path: mobile/pnpm-lock.yaml
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile

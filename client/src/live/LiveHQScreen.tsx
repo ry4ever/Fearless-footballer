@@ -1,242 +1,209 @@
-import { useCallback, useEffect, useState } from "react";
-import { ChevronRight, Flame } from "lucide-react";
-import type { AthleteProgress, SessionLibraryResponse, SessionPackage } from "@shared/types";
-import { FearlessHeaderLogo } from "../components/icons/CustomIcons";
-import { apiClient } from "../lib/apiClient";
-import { offlineQueue } from "../lib/offlineQueue";
+import { useState } from "react";
+import { Bell, ChevronRight, Flame, Play } from "lucide-react";
+import type { SessionPackage } from "@shared/types";
+import { FearlessWordmark } from "../components/icons/CustomIcons";
+import { photo } from "../lib/onboardingOptions";
 import { loadPlan } from "./plan";
 import { useSession } from "./session";
+import {
+  currentProgramme,
+  lastSevenDayLabels,
+  nextSession,
+  programmePhoto,
+  programmeViews,
+  useAthleteData,
+} from "./useAthleteData";
 
 interface LiveHQScreenProps {
   onStartSession: (session: SessionPackage) => void;
-}
-
-/** A playable session opens straight into the player; coming-soon ones are listed only. */
-function SessionRow({
-  session,
-  index,
-  onStart,
-}: {
-  session: SessionPackage;
-  index?: number;
-  onStart: (session: SessionPackage) => void;
-}) {
-  const content = (
-    <>
-      {index !== undefined && <span className="row-index">{index}</span>}
-      <span className="row-text">
-        <strong>{session.title}</strong>
-        {session.focusArea && <small>{session.focusArea}</small>}
-      </span>
-      {session.comingSoon ? <span className="row-badge">SOON</span> : <ChevronRight size={18} color="#69e0fa" />}
-    </>
-  );
-  if (session.comingSoon) {
-    return (
-      <div className="live-session-row soon" aria-label={`${session.title}, coming soon`}>
-        {content}
-      </div>
-    );
-  }
-  return (
-    <button type="button" className="live-session-row" onClick={() => onStart(session)}>
-      {content}
-    </button>
-  );
+  onOpenTab: (tab: "training" | "progress" | "more") => void;
 }
 
 function greeting(now = new Date()) {
   const hour = now.getHours();
-  if (hour < 12) return "GOOD MORNING";
-  if (hour < 18) return "GOOD AFTERNOON";
-  return "GOOD EVENING";
+  if (hour < 12) return "Good morning";
+  if (hour < 18) return "Good afternoon";
+  return "Good evening";
 }
 
-export function LiveHQScreen({ onStartSession }: LiveHQScreenProps) {
+export function LoadState({ error, onRetry, label }: { error: string; onRetry: () => void; label: string }) {
+  return (
+    <div className="screen live-screen">
+      <div className="live-center" aria-live="polite">
+        {error ? (
+          <>
+            <div className="live-error" role="alert">
+              {error}
+            </div>
+            <button type="button" className="primary-button" onClick={onRetry}>
+              Try again
+            </button>
+          </>
+        ) : (
+          <>
+            <div className="live-spinner" aria-hidden="true" />
+            <span className="live-note">{label}</span>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
+export function PendingNote({ pending }: { pending: number }) {
+  if (pending === 0) return null;
+  return (
+    <p className="live-note" role="status">
+      {pending === 1 ? "1 rep is" : `${pending} reps are`} saved on this device and will sync when you're back online.
+    </p>
+  );
+}
+
+export function LiveHQScreen({ onStartSession, onOpenTab }: LiveHQScreenProps) {
   const { user } = useSession();
-  const [progress, setProgress] = useState<AthleteProgress | null>(null);
-  const [library, setLibrary] = useState<SessionLibraryResponse | null>(null);
-  const [error, setError] = useState("");
-  const [pending, setPending] = useState(() => (user ? offlineQueue.pendingCount(user.id) : 0));
+  const { progress, library, error, pending, reload } = useAthleteData();
+  const [showNotifications, setShowNotifications] = useState(false);
   const plan = user ? loadPlan(user.id) : null;
 
-  const load = useCallback(async () => {
-    setError("");
-    try {
-      const [nextProgress, nextLibrary] = await Promise.all([apiClient.getAthleteProgress(), apiClient.getLibrary()]);
-      setProgress(nextProgress);
-      setLibrary(nextLibrary);
-    } catch (caught) {
-      setError(caught instanceof Error ? caught.message : "We couldn't load your HQ.");
-    }
-  }, []);
-
-  useEffect(() => {
-    void load();
-  }, [load]);
-
-  // Reload stats once queued offline reps reach the server.
-  useEffect(() => {
-    if (!user) return;
-    return offlineQueue.subscribe(() => {
-      const next = offlineQueue.pendingCount(user.id);
-      setPending((previous) => {
-        if (next < previous) void load();
-        return next;
-      });
-    });
-  }, [user, load]);
-
-  if (error && !progress) {
-    return (
-      <div className="screen live-screen">
-        <div className="live-center">
-          <div className="live-error" role="alert">
-            {error}
-          </div>
-          <button type="button" className="primary-button" onClick={() => void load()}>
-            Try again
-          </button>
-        </div>
-      </div>
-    );
-  }
-
   if (!progress || !library) {
-    return (
-      <div className="screen live-screen">
-        <div className="live-center" aria-live="polite">
-          <div className="live-spinner" aria-hidden="true" />
-          <span className="live-note">Loading your HQ…</span>
-        </div>
-      </div>
-    );
+    return <LoadState error={error} onRetry={() => void reload()} label="Loading your HQ…" />;
   }
 
-  const byId = new Map(library.sessions.map((session) => [session.id, session]));
-  const programmes = library.programmes.filter((programme) => programme.sessionIds.some((id) => byId.has(id)));
-  const playable = library.sessions.filter((session) => !session.comingSoon);
-  const comingSoon = library.sessions.filter((session) => session.comingSoon);
-  const groups = new Map<string, SessionPackage[]>();
-  for (const session of playable) {
-    const key = session.focusArea ?? "Sessions";
-    groups.set(key, [...(groups.get(key) ?? []), session]);
-  }
+  const firstName = progress.athleteName.trim().split(/\s+/)[0] || "Player";
+  const views = programmeViews(library, progress);
+  const programme = currentProgramme(views, plan);
+  const today = programme ? nextSession(programme, progress) : null;
+  const fallback = library.sessions.find((session) => !session.comingSoon);
+  const todaySession = today?.session ?? fallback;
+  const dayLabels = lastSevenDayLabels();
 
   return (
-    <div className="screen hq-screen live-screen">
-      <div className="hero-wash" />
-      <header className="live-header">
-        <FearlessHeaderLogo subtitle="HQ" size="md" />
+    <div className="screen hq2-screen">
+      <div className="hq2-glow" aria-hidden="true" />
+      <header className="hq2-header">
+        <FearlessWordmark />
+        <div className="hq2-header-actions">
+          <button
+            type="button"
+            className="hq2-icon-button"
+            aria-label="Notifications"
+            aria-expanded={showNotifications}
+            onClick={() => setShowNotifications((open) => !open)}
+          >
+            <Bell size={20} />
+          </button>
+          <button type="button" className="hq2-avatar" aria-label="Your account" onClick={() => onOpenTab("more")}>
+            {firstName.charAt(0).toUpperCase()}
+          </button>
+          {showNotifications && (
+            <div className="hq2-popover" role="status">
+              You're all caught up.
+            </div>
+          )}
+        </div>
       </header>
 
-      <section>
-        <span className="eyebrow">
-          {greeting()}, {progress.athleteName.toUpperCase()}
-        </span>
-        <h1 className="live-title">Fearless HQ</h1>
+      <section className="hq2-hello">
+        <p>{greeting()}, {firstName}.</p>
+        <h1>
+          Fearless <span>HQ</span>
+        </h1>
+        <span className="hq2-method">SEE | REHEARSE | BECOME</span>
       </section>
+
+      <PendingNote pending={pending} />
 
       {plan && (
-        <section className="live-card">
-          <span className="eyebrow">YOUR CURRENT FOCUS</span>
-          <h2>{plan.goal}</h2>
-          <p className="live-copy">Matchday: {plan.matchday}</p>
+        <section className="hq2-card hq2-focus" aria-label="Your current focus">
+          <div className="hq2-focus-text">
+            <span className="hq2-eyebrow">YOUR CURRENT FOCUS</span>
+            <h2>{plan.goal}</h2>
+          </div>
+          <img src={photo("ball")} alt="" />
         </section>
       )}
 
-      {pending > 0 && (
-        <p className="live-note" role="status">
-          {pending === 1 ? "1 rep is" : `${pending} reps are`} saved on this device and will sync when you're back online.
-        </p>
-      )}
+      <button type="button" className="hq2-card hq2-streak" onClick={() => onOpenTab("progress")} aria-label={`Current streak ${progress.currentStreakDays} days. See your progress`}>
+        <span className="hq2-flame">
+          <Flame size={22} />
+        </span>
+        <span className="hq2-streak-text">
+          <span className="hq2-eyebrow">CURRENT STREAK</span>
+          <strong>
+            {progress.currentStreakDays} {progress.currentStreakDays === 1 ? "day" : "days"}
+          </strong>
+        </span>
+        <span className="hq2-days" aria-hidden="true">
+          {progress.sevenDayPattern.map((done, index) => (
+            <span key={index} className={done ? "done" : ""}>
+              <i />
+              {dayLabels[index]}
+            </span>
+          ))}
+        </span>
+        <ChevronRight size={18} className="hq2-chevron" />
+      </button>
 
-      <section aria-label="Your streak">
-        <div className="metric-card streak-active-card">
-          <div className="streak-header-row">
-            <div className="flame-glow-icon">
-              <Flame size={26} />
+      {todaySession ? (
+        <section className="hq2-card hq2-today" aria-label="Today's training">
+          <img src={photo("headphones")} alt="" />
+          <div className="hq2-today-body">
+            <div className="hq2-row">
+              <span className="hq2-eyebrow">TODAY'S TRAINING</span>
+              {programme && today && (
+                <span className="hq2-count">
+                  {today.index + 1}/{programme.sessions.length}
+                </span>
+              )}
             </div>
-            <div>
-              <span className="eyebrow">CURRENT STREAK</span>
-              <strong className="streak-number">
-                {progress.currentStreakDays} {progress.currentStreakDays === 1 ? "day" : "days"}
-              </strong>
-              <small style={{ color: "rgba(255,255,255,0.6)", display: "block", fontSize: "0.7rem", marginTop: 2 }}>
-                Best: {progress.bestStreakDays} {progress.bestStreakDays === 1 ? "day" : "days"}
-              </small>
+            <h2>{todaySession.title}</h2>
+            <div className="hq2-row hq2-today-foot">
+              <span className="hq2-meta">
+                {todaySession.focusArea ? `${todaySession.focusArea.toUpperCase()} · ` : ""}VISUALISATION
+              </span>
+              <button type="button" className="hq2-play" aria-label={`Play ${todaySession.title}`} onClick={() => onStartSession(todaySession)}>
+                <Play size={22} fill="currentColor" />
+              </button>
             </div>
           </div>
-        </div>
-      </section>
-
-      {programmes.length > 0 && (
-        <section aria-label="Programmes">
-          <span className="eyebrow" style={{ marginBottom: 8 }}>
-            YOUR PROGRAMMES
-          </span>
-          {programmes.map((programme) => (
-            <div key={programme.slug} className="live-card" style={{ marginTop: 10 }}>
-              <h2>{programme.title}</h2>
-              <p className="live-copy" style={{ marginBottom: 12 }}>
-                {programme.description}
-              </p>
-              {programme.sessionIds.map((id, index) => {
-                const session = byId.get(id);
-                return session ? <SessionRow key={id} session={session} index={index + 1} onStart={onStartSession} /> : null;
-              })}
-            </div>
-          ))}
-        </section>
-      )}
-
-      {playable.length === 0 ? (
-        <section className="live-card" aria-label="Sessions">
-          <span className="eyebrow">OFF-PITCH TRAINING</span>
-          <h2>No session available yet</h2>
-          <p className="live-copy">New training is on its way. Check back soon – your progress is saved.</p>
         </section>
       ) : (
-        <section aria-label="All sessions">
-          <span className="eyebrow">ALL SESSIONS</span>
-          {Array.from(groups.entries()).map(([group, sessions]) => (
-            <div key={group} style={{ marginTop: 12 }}>
-              <p className="live-note" style={{ textAlign: "left", marginBottom: 6 }}>
-                {group}
-              </p>
-              {sessions.map((session) => (
-                <SessionRow key={session.id} session={session} onStart={onStartSession} />
-              ))}
-            </div>
-          ))}
+        <section className="hq2-card" aria-label="Today's training">
+          <span className="hq2-eyebrow">TODAY'S TRAINING</span>
+          <h2>New training is on its way</h2>
+          <p className="live-copy">Check back soon – your progress is saved.</p>
         </section>
       )}
 
-      <section className="live-card" aria-label="Last 7 days">
-        <span className="eyebrow">LAST 7 DAYS</span>
-        <h2>
-          {progress.weeklyCompletedDays} of {progress.weeklyTargetDays} days trained
-        </h2>
-        <div className="week-dots" aria-hidden="true">
-          {progress.sevenDayPattern.map((done, index) => (
-            <span key={index} className={done ? "done" : ""} />
-          ))}
-        </div>
-        {progress.lastRep.completedAt && (
-          <p className="live-note" style={{ textAlign: "left", marginTop: 10 }}>
-            Last rep: {progress.lastRep.title} · {progress.lastRep.duration}
-          </p>
-        )}
-      </section>
-
-      {comingSoon.length > 0 && (
-        <section aria-label="Coming soon">
-          <span className="eyebrow">COMING SOON</span>
-          <div style={{ marginTop: 8 }}>
-            {comingSoon.map((session) => (
-              <SessionRow key={session.id} session={session} onStart={onStartSession} />
-            ))}
+      {views.length > 0 && (
+        <section className="hq2-card hq2-programmes" aria-label="Your programmes">
+          <div className="hq2-row">
+            <span className="hq2-eyebrow">YOUR PROGRAMMES</span>
+            <button type="button" className="hq2-link" onClick={() => onOpenTab("training")}>
+              See all →
+            </button>
           </div>
+          {(programme ? [programme, ...views.filter((view) => view !== programme)] : views).slice(0, 2).map((view) => (
+            <button
+              key={view.programme.slug}
+              type="button"
+              className="hq2-programme"
+              onClick={() => onStartSession(nextSession(view, progress).session)}
+              aria-label={`${view.programme.title}, ${view.completed} of ${view.sessions.length} sessions done. Play the next session`}
+            >
+              <img src={programmePhoto(view.programme.slug)} alt="" />
+              <span className="hq2-programme-text">
+                <strong>{view.programme.title}</strong>
+                <small>{view.sessions.map((session) => session.title).join(" · ")}</small>
+                <span className="hq2-bar" aria-hidden="true">
+                  <span style={{ width: `${(view.completed / view.sessions.length) * 100}%` }} />
+                </span>
+                <small>
+                  {view.completed} of {view.sessions.length} sessions
+                </small>
+              </span>
+            </button>
+          ))}
         </section>
       )}
     </div>

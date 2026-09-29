@@ -9,17 +9,20 @@ import { colors } from "./index";
 export function SessionRow({
   session,
   index,
+  done = false,
   onPress,
 }: {
   session: SessionPackage;
   index?: number;
+  /** Completed at least once (programme lists fill the number in). */
+  done?: boolean;
   onPress: () => void;
 }) {
   const content = (
     <>
       {index !== undefined ? (
-        <View style={styles.index}>
-          <Text style={styles.indexText}>{index}</Text>
+        <View style={[styles.index, done && styles.indexDone]}>
+          <Text style={[styles.indexText, done && styles.indexTextDone]}>{index}</Text>
         </View>
       ) : null}
       <View style={styles.rowText}>
@@ -79,6 +82,8 @@ const styles = {
     backgroundColor: "rgba(94, 234, 212, 0.14)",
   },
   indexText: { color: colors.cyan, fontSize: 12, fontWeight: "900" },
+  indexDone: { backgroundColor: colors.cyan },
+  indexTextDone: { color: "#041126" },
   rowText: { flex: 1 },
   title: { color: colors.white, fontSize: 15, fontWeight: "800" },
   meta: { color: colors.muted, fontSize: 12, marginTop: 2 },

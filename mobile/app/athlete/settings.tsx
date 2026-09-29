@@ -1,17 +1,31 @@
 import React from "react";
 import { Alert } from "react-native";
+import { Text, View } from "react-native";
 import { useRouter } from "expo-router";
+import type { OnboardingPlan } from "../../../shared/onboarding";
 import { getApiFacade } from "../../src/lib/apiFacade";
+import { loadPlan } from "../../src/lib/plan";
+import { canAthleteAccessSession, canCaregiverAccessDashboard } from "../../src/lib/sessionGuard";
 import { clearSessionState, saveSessionState } from "../../src/lib/sessionStore";
 import { AthleteAccountGuard, useSession } from "../../src/session";
-import { Brand, Button, PageTitle, PrivacyNotice, Screen, StatusCard } from "../../src/ui";
+import { Button, PrivacyNotice, Screen, StatusCard, Wordmark } from "../../src/ui";
+import { hq } from "../../src/ui/hqStyles";
+import { TabBar } from "../../src/ui/TabBar";
 
 function AthleteSettingsContent() {
   const router = useRouter();
-  const { state, refresh, signOut } = useSession();
+  const { state, refresh, signOut, switchRole } = useSession();
   const account = state?.currentUser;
   const [busy, setBusy] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
+  const [plan, setPlan] = React.useState<OnboardingPlan | null>(null);
+  const hasAccess = Boolean(account && canAthleteAccessSession(account, state?.pairing));
+  const pairingPending = state?.pairing?.status === "pending_athlete_approval";
+  const pairingActive = state?.pairing?.status === "active";
+
+  React.useEffect(() => {
+    if (account?.id) loadPlan(account.id).then(setPlan);
+  }, [account?.id]);
 
   async function revokeCaregiver() {
     if (!account || !state?.pairing?.id || state.pairing.status !== "active") return;
@@ -77,12 +91,36 @@ function AthleteSettingsContent() {
   }
 
   return (
-    <Screen testID="athlete-settings-screen">
-      <Brand compact />
-      <PageTitle
-        eyebrow="Athlete account"
-        title="Privacy and account"
-        copy="Control caregiver access and manage the data stored for this athlete account."
+    <Screen testID="athlete-settings-screen" footer={hasAccess ? <TabBar active="more" /> : undefined}>
+      <Wordmark />
+      <View style={hq.hello}>
+        <Text style={hq.helloLine}>{account?.displayName}</Text>
+        <Text style={[hq.bigTitle, hq.accent]} accessibilityRole="header">
+          More
+        </Text>
+      </View>
+      <View style={hq.card}>
+        <Text style={hq.eyebrow}>YOUR PLAN</Text>
+        {plan ? (
+          <>
+            <Text style={hq.cardTitle}>{plan.goal}</Text>
+            <Text style={[hq.small, { marginBottom: 12 }]}>Matchday: {plan.matchday}</Text>
+          </>
+        ) : (
+          <Text style={[hq.small, { marginBottom: 12 }]}>You haven't set a focus yet.</Text>
+        )}
+        <Button
+          label={plan ? "Change my plan" : "Set my plan"}
+          variant="secondary"
+          onPress={() => router.push("/athlete/onboarding")}
+          accessibilityLabel="Change your training plan"
+        />
+      </View>
+      <Button
+        label={pairingPending ? "Review pairing" : pairingActive ? "Manage caregiver link" : "Pair with a parent or guardian"}
+        variant="secondary"
+        onPress={() => router.replace(pairingPending || pairingActive ? "/pairing/approval" : "/pairing/code")}
+        accessibilityLabel="Open pairing management"
       />
       {error ? <StatusCard tone="danger" title="Account action failed">{error}</StatusCard> : null}
       <StatusCard tone="success" title="Private reflections">
@@ -115,6 +153,20 @@ function AthleteSettingsContent() {
         loading={busy}
         onPress={deleteAccount}
         accessibilityLabel="Delete athlete account"
+      />
+      <Button
+        label="Switch account"
+        variant="quiet"
+        onPress={async () => {
+          const nextState = await switchRole("caregiver");
+          const caregiver = nextState.caregiverAccount;
+          router.replace(
+            caregiver && canCaregiverAccessDashboard(caregiver, nextState.pairing)
+              ? "/caregiver/dashboard"
+              : "/caregiver/unlinked",
+          );
+        }}
+        accessibilityLabel="Switch to caregiver account"
       />
       <Button
         label="Sign out"

@@ -1622,6 +1622,20 @@ async function getAthleteProgressHandler(req: Request, res: Response) {
       }
     : { title: "No completed reps", duration: "", completedAt: "", completedToday: false };
 
+  const completions = await prisma.sessionCompleted.findMany({
+    where: { userId: metrics.athlete.userId },
+    select: { sessionId: true, completedAt: true },
+  });
+  const todayKey = localDayKey(now, metrics.timezone);
+  const completedSessionIds = Array.from(new Set(completions.map((completion) => completion.sessionId)));
+  const completedTodaySessionIds = Array.from(
+    new Set(
+      completions
+        .filter((completion) => localDayKey(completion.completedAt, metrics.timezone) === todayKey)
+        .map((completion) => completion.sessionId),
+    ),
+  );
+
   const progress: AthleteProgress = {
     athleteId: metrics.athlete.userId,
     athleteName: decryptPII(metrics.athlete.user.fullName),
@@ -1633,6 +1647,8 @@ async function getAthleteProgressHandler(req: Request, res: Response) {
     weeklyCompletedDays: metrics.completedDays,
     sevenDayPattern: metrics.sevenDayPattern,
     lastRep,
+    completedSessionIds,
+    completedTodaySessionIds,
     moodTrend: {
       status: "Steady",
       subtitle: "A private post-rep check-in was completed.",

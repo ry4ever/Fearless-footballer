@@ -1,126 +1,76 @@
-import { useEffect, useState } from "react";
-import { Text, View } from "react-native";
-import { useRouter } from "expo-router";
-import { getApiFacade, LocalApiError } from "../../src/lib/apiFacade";
-import { AthleteRouteGuard, useSession } from "../../src/session";
-import { canCaregiverAccessDashboard } from "../../src/lib/sessionGuard";
-import { addConnectivityListener } from "../../src/lib/offlineCompletionQueue";
+import { useState } from "react";
+import { Image, Pressable, Text, View } from "react-native";
+import { Redirect, useRouter } from "expo-router";
+import { programmePhoto } from "../../../shared/onboarding";
 import {
-  Brand,
-  Button,
-  PageTitle,
-  PrivacyNotice,
-  ProgressBar,
-  Screen,
-  StatusCard,
-  colors,
-} from "../../src/ui";
-import { SessionRow } from "../../src/ui/SessionContent";
-import type { AthleteProgress, SessionLibraryResponse, SessionPackage } from "../../../shared/types";
+  currentProgramme,
+  firstName,
+  greetingFor,
+  lastSevenDayLabels,
+  nextSession,
+  programmeViews,
+} from "../../../shared/training";
+import type { SessionPackage } from "../../../shared/types";
+import { useAthleteData } from "../../src/lib/useAthleteData";
+import { AthleteRouteGuard } from "../../src/session";
+import { LoadingRow, Screen, StatusCard, Wordmark, colors } from "../../src/ui";
+import { hq } from "../../src/ui/hqStyles";
+import { photos } from "../../src/ui/photos";
+import { TabBar } from "../../src/ui/TabBar";
 
 function AthleteHomeContent() {
   const router = useRouter();
-  const { state, signOut, switchRole } = useSession();
-  const api = getApiFacade({ role: state?.currentRole ?? "athlete" });
-  const [library, setLibrary] = useState<SessionLibraryResponse | null>(null);
-  const [progress, setProgress] = useState<AthleteProgress | null>(null);
-  const [pendingCompletions, setPendingCompletions] = useState(0);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const account = state?.currentUser;
+  const { account, library, progress, plan, pendingCompletions, loading, error } = useAthleteData();
+  const [showNotifications, setShowNotifications] = useState(false);
 
-  useEffect(() => {
-    if (!account?.id) return;
-    let mounted = true;
-    setLoading(true);
-    setError(null);
-    Promise.all([
-      api.getSessionLibrary(),
-      api.getAthleteProgress(),
-      api.getOfflineQueueStatus(),
-    ])
-      .then(([libraryResult, progressResult, queueStatus]) => {
-        if (!mounted) return;
-        setLibrary(libraryResult);
-        setProgress(progressResult);
-        setPendingCompletions(queueStatus.pending);
-      })
-      .catch((caught) => {
-        if (!mounted) return;
-        setError(
-          caught instanceof LocalApiError
-            ? caught.message
-            : "Unable to load your beta rehearsal space.",
-        );
-      })
-      .finally(() => {
-        if (mounted) setLoading(false);
-      });
-    return () => {
-      mounted = false;
-    };
-  }, [account?.id, state?.pairing?.id]);
+  // No plan saved on this device yet: onboarding first.
+  if (plan === null) return <Redirect href="/athlete/onboarding" />;
 
-  // Wire connectivity listener to sync offline completions when coming online
-  useEffect(() => {
-    if (!account?.id) return undefined;
-    const unsubscribe = addConnectivityListener(() => {
-      api.syncOfflineCompletions()
-        .then((result) => {
-          if (result.synced > 0) {
-            setPendingCompletions((current) => Math.max(0, current - result.synced));
-          }
-        })
-        .catch(() => null);
-    });
-    return unsubscribe;
-  }, [account?.id]);
-
-  const hour = new Date().getHours();
-  const greeting = hour < 12 ? "Good morning" : hour < 18 ? "Good afternoon" : "Good evening";
-  const pending = state?.pairing?.status === "pending_athlete_approval";
-  const active = state?.pairing?.status === "active";
-  const currentProgress = progress ?? state?.athleteProgress ?? null;
-  const sessions = library?.sessions ?? [];
-  const byId = new Map(sessions.map((item) => [item.id, item]));
-  const programmes = (library?.programmes ?? []).filter((programme) =>
-    programme.sessionIds.some((id) => byId.has(id)),
-  );
-  const playable = sessions.filter((item) => !item.comingSoon);
-  const comingSoon = sessions.filter((item) => item.comingSoon);
-  const groups = new Map<string, SessionPackage[]>();
-  for (const item of playable) {
-    const key = item.focusArea ?? "Sessions";
-    groups.set(key, [...(groups.get(key) ?? []), item]);
-  }
+  const name = firstName(progress?.athleteName ?? account?.displayName);
+  const views = library && progress ? programmeViews(library, progress) : [];
+  const programme = currentProgramme(views, plan ?? null);
+  const today = programme && progress ? nextSession(programme, progress) : null;
+  const todaySession = today?.session ?? library?.sessions.find((item) => !item.comingSoon);
+  const dayLabels = lastSevenDayLabels();
   // A session opens straight into the player; the version is chosen there.
   const openSession = (item: SessionPackage) => router.push(`/session/${item.id}`);
+  const ordered = programme ? [programme, ...views.filter((view) => view !== programme)] : views;
 
   return (
-    <Screen testID="athlete-home-screen">
-      <Brand compact />
-      <PageTitle
-        eyebrow={greeting}
-        title={account?.displayName ? `${account.displayName}, today's off-pitch training.` : "Off-pitch training for footballers"}
-        copy="See it. Rehearse it. Become it. Technical, tactical, and mental development."
-      />
-      <View style={styles.stateRow}>
-        <StatusCard tone="info" title="Current streak">
-          {currentProgress
-            ? `${currentProgress.currentStreakDays} day${currentProgress.currentStreakDays === 1 ? "" : "s"} · Best ${currentProgress.bestStreakDays}`
-            : "Complete a session to start your streak."}
-        </StatusCard>
-      </View>
-      {currentProgress ? (
-        <View style={styles.progressWrap}>
-          <ProgressBar
-            value={currentProgress.weeklyCompletedDays}
-            maximumValue={currentProgress.weeklyTargetDays}
-            label={`${currentProgress.weeklyCompletedDays}/${currentProgress.weeklyTargetDays} days this week`}
-            testID="weekly-progress-bar"
-          />
+    <Screen testID="athlete-home-screen" footer={<TabBar active="home" />}>
+      <View style={styles.header}>
+        <Wordmark />
+        <View style={styles.headerActions}>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Notifications"
+            onPress={() => setShowNotifications((open) => !open)}
+            style={styles.iconButton}
+          >
+            <Text style={styles.iconGlyph}>🔔</Text>
+          </Pressable>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Your account"
+            onPress={() => router.replace("/athlete/settings")}
+            style={styles.avatar}
+          >
+            <Text style={styles.avatarText}>{name.charAt(0).toUpperCase()}</Text>
+          </Pressable>
         </View>
-      ) : null}
+      </View>
+      {showNotifications ? <Text style={styles.popover}>You're all caught up.</Text> : null}
+
+      <View style={hq.hello}>
+        <Text style={hq.helloLine}>
+          {greetingFor()}, {name}.
+        </Text>
+        <Text style={hq.bigTitle} accessibilityRole="header">
+          Fearless <Text style={hq.accent}>HQ</Text>
+        </Text>
+        <Text style={hq.method}>SEE | REHEARSE | BECOME</Text>
+      </View>
+
       {pendingCompletions > 0 ? (
         <StatusCard tone="warning" title="Saved on this device">
           {pendingCompletions} completion{pendingCompletions === 1 ? "" : "s"} will sync when you reconnect.
@@ -131,101 +81,178 @@ function AthleteHomeContent() {
           {error}
         </StatusCard>
       ) : null}
-      {loading ? (
-        <StatusCard tone="info" title="Loading your sessions">
-          Checking your training library…
-        </StatusCard>
-      ) : !error && playable.length === 0 ? (
+
+      {plan ? (
+        <View style={[hq.card, styles.focus]} accessibilityLabel={`Your current focus: ${plan.goal}`}>
+          <Image source={photos.ball} style={styles.focusPhoto} resizeMode="cover" />
+          <View style={styles.focusText}>
+            <Text style={hq.eyebrow}>YOUR CURRENT FOCUS</Text>
+            <Text style={hq.cardTitle}>{plan.goal}</Text>
+          </View>
+        </View>
+      ) : null}
+
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={`Current streak ${progress?.currentStreakDays ?? 0} days. See your progress`}
+        onPress={() => router.replace("/athlete/progress")}
+        style={({ pressed }) => [hq.card, styles.streak, pressed && hq.pressed]}
+        testID="streak-card"
+      >
+        <View style={styles.flame}>
+          <Text style={styles.flameGlyph}>🔥</Text>
+        </View>
+        <View>
+          <Text style={hq.eyebrow}>CURRENT STREAK</Text>
+          <Text style={styles.streakValue}>
+            {progress?.currentStreakDays ?? 0} {progress?.currentStreakDays === 1 ? "day" : "days"}
+          </Text>
+        </View>
+        <View style={hq.days}>
+          {(progress?.sevenDayPattern ?? Array(7).fill(false)).map((done: boolean, index: number) => (
+            <View key={index} style={hq.day}>
+              <View style={[hq.dayDot, done && hq.dayDotDone]} />
+              <Text style={[hq.dayLabel, done && hq.accent]}>{dayLabels[index]}</Text>
+            </View>
+          ))}
+        </View>
+        <Text style={styles.chevron}>›</Text>
+      </Pressable>
+
+      {loading && !library ? <LoadingRow label="Loading your training…" /> : null}
+
+      {todaySession ? (
+        <View style={[hq.card, styles.today]} testID="todays-training">
+          <Image source={photos.headphones} style={styles.todayPhoto} resizeMode="cover" />
+          <View style={styles.todayShade} />
+          <View style={styles.todayBody}>
+            <View style={hq.row}>
+              <Text style={hq.eyebrow}>TODAY'S TRAINING</Text>
+              {programme && today ? (
+                <Text style={styles.count}>
+                  {today.index + 1}/{programme.sessions.length}
+                </Text>
+              ) : null}
+            </View>
+            <Text style={styles.todayTitle}>{todaySession.title}</Text>
+            <View style={[hq.row, styles.todayFoot]}>
+              <Text style={hq.meta}>
+                {todaySession.focusArea ? `${todaySession.focusArea.toUpperCase()} · ` : ""}VISUALISATION
+              </Text>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel={`Play ${todaySession.title}`}
+                onPress={() => openSession(todaySession)}
+                style={({ pressed }) => [styles.play, pressed && hq.pressed]}
+                testID="play-todays-training"
+              >
+                <Text style={styles.playGlyph}>▶</Text>
+              </Pressable>
+            </View>
+          </View>
+        </View>
+      ) : !loading && !error ? (
         <StatusCard tone="info" title="No session available yet">
           New training is on its way. Check back soon — your progress is saved.
         </StatusCard>
       ) : null}
-      {programmes.map((programme) => (
-        <View key={programme.slug} style={styles.section} testID={`programme-${programme.slug}`}>
-          <Text style={styles.eyebrow}>PROGRAMME</Text>
-          <Text style={styles.sectionTitle}>{programme.title}</Text>
-          <Text style={styles.sectionCopy}>{programme.description}</Text>
-          {programme.sessionIds.map((id, index) => {
-            const item = byId.get(id);
-            return item ? (
-              <SessionRow key={id} session={item} index={index + 1} onPress={() => openSession(item)} />
-            ) : null;
-          })}
-        </View>
-      ))}
-      {playable.length > 0 ? (
-        <View style={styles.section} testID="all-sessions">
-          <Text style={styles.eyebrow}>ALL SESSIONS</Text>
-          {Array.from(groups.entries()).map(([group, items]) => (
-            <View key={group}>
-              <Text style={styles.groupLabel}>{group}</Text>
-              {items.map((item) => (
-                <SessionRow key={item.id} session={item} onPress={() => openSession(item)} />
-              ))}
-            </View>
+
+      {ordered.length > 0 && progress ? (
+        <View style={hq.card} testID="your-programmes">
+          <View style={hq.row}>
+            <Text style={hq.eyebrow}>YOUR PROGRAMMES</Text>
+            <Pressable accessibilityRole="button" onPress={() => router.replace("/athlete/training")} hitSlop={8}>
+              <Text style={hq.link}>See all →</Text>
+            </Pressable>
+          </View>
+          {ordered.slice(0, 2).map((view) => (
+            <Pressable
+              key={view.programme.slug}
+              accessibilityRole="button"
+              accessibilityLabel={`${view.programme.title}, ${view.completed} of ${view.sessions.length} sessions done. Play the next session`}
+              onPress={() => openSession(nextSession(view, progress).session)}
+              style={({ pressed }) => [styles.programme, pressed && hq.pressed]}
+              testID={`programme-${view.programme.slug}`}
+            >
+              <Image source={photos[programmePhoto(view.programme.slug)]} style={hq.thumb} resizeMode="cover" />
+              <View style={styles.programmeText}>
+                <Text style={styles.programmeTitle}>{view.programme.title}</Text>
+                <Text style={hq.small} numberOfLines={1}>
+                  {view.sessions.map((item) => item.title).join(" · ")}
+                </Text>
+                <View style={hq.barTrack}>
+                  <View style={[hq.barFill, { width: `${(view.completed / view.sessions.length) * 100}%` }]} />
+                </View>
+                <Text style={hq.small}>
+                  {view.completed} of {view.sessions.length} sessions
+                </Text>
+              </View>
+            </Pressable>
           ))}
         </View>
       ) : null}
-      {comingSoon.length > 0 ? (
-        <View style={styles.section} testID="coming-soon">
-          <Text style={styles.eyebrow}>COMING SOON</Text>
-          {comingSoon.map((item) => (
-            <SessionRow key={item.id} session={item} onPress={() => openSession(item)} />
-          ))}
-        </View>
-      ) : null}
-      <Button
-        label={pending ? "Review pairing" : active ? "Manage caregiver link" : "Pair with a parent or guardian"}
-        variant="secondary"
-        onPress={() =>
-          router.replace(
-            pending || active ? "/pairing/approval" : "/pairing/code",
-          )
-        }
-        accessibilityLabel="Open pairing management"
-      />
-      <Button
-        label="Privacy and account"
-        variant="secondary"
-        onPress={() => router.push("/athlete/settings")}
-        accessibilityLabel="Open athlete privacy and account settings"
-      />
-      <Button
-        label="Switch account"
-        variant="quiet"
-        onPress={async () => {
-          const nextState = await switchRole("caregiver");
-          const caregiver = nextState.caregiverAccount;
-          router.replace(
-            caregiver && canCaregiverAccessDashboard(caregiver, nextState.pairing)
-              ? "/caregiver/dashboard"
-              : "/caregiver/unlinked",
-          );
-        }}
-        accessibilityLabel="Switch to caregiver account"
-      />
-      <Button
-        label="Sign out"
-        variant="quiet"
-        onPress={async () => {
-          await signOut();
-          router.replace("/welcome");
-        }}
-        accessibilityLabel="Sign out of this device"
-      />
-      <PrivacyNotice />
     </Screen>
   );
 }
 
 const styles = {
-  stateRow: { gap: 12, marginBottom: 12 },
-  progressWrap: { marginBottom: 16 },
-  section: { marginBottom: 20 },
-  eyebrow: { color: colors.cyan, fontSize: 11, fontWeight: "900", letterSpacing: 1, marginBottom: 6 },
-  sectionTitle: { color: colors.white, fontSize: 19, fontWeight: "900", marginBottom: 4 },
-  sectionCopy: { color: colors.muted, fontSize: 14, lineHeight: 21, marginBottom: 12 },
-  groupLabel: { color: colors.muted, fontSize: 13, fontWeight: "700", marginTop: 8, marginBottom: 8 },
+  header: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
+  headerActions: { flexDirection: "row", alignItems: "center", gap: 10 },
+  iconButton: { width: 40, height: 40, borderRadius: 20, alignItems: "center", justifyContent: "center", backgroundColor: "rgba(14, 32, 72, 0.6)" },
+  iconGlyph: { fontSize: 16 },
+  avatar: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    borderWidth: 1.5,
+    borderColor: colors.cyan,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(94, 234, 212, 0.12)",
+  },
+  avatarText: { color: colors.cyan, fontSize: 17, fontWeight: "900" },
+  popover: {
+    alignSelf: "flex-end",
+    marginTop: 8,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: "rgba(94, 234, 212, 0.3)",
+    backgroundColor: "#0D1A3A",
+    color: "#CFE0F7",
+    fontSize: 13,
+    overflow: "hidden",
+  },
+  focus: { minHeight: 112, padding: 0, justifyContent: "center" },
+  focusPhoto: { position: "absolute", right: 0, top: 0, bottom: 0, width: "50%", height: "100%", opacity: 0.85 },
+  focusText: { padding: 16, maxWidth: "62%" },
+  streak: { flexDirection: "row", alignItems: "center", gap: 12 },
+  flame: { width: 42, height: 42, borderRadius: 13, alignItems: "center", justifyContent: "center", backgroundColor: "rgba(255, 124, 64, 0.16)" },
+  flameGlyph: { fontSize: 20 },
+  streakValue: { color: colors.white, fontSize: 21, fontWeight: "900", marginTop: 3 },
+  chevron: { color: "#7A91B8", fontSize: 22, fontWeight: "700" },
+  today: { minHeight: 190, padding: 0, borderColor: "rgba(94, 234, 212, 0.55)" },
+  todayPhoto: { position: "absolute", top: 0, right: 0, bottom: 0, width: "70%", height: "100%" },
+  todayShade: { position: "absolute", top: 0, right: 0, bottom: 0, left: 0, backgroundColor: "rgba(5, 10, 25, 0.45)" },
+  todayBody: { flex: 1, minHeight: 190, padding: 16 },
+  todayTitle: { color: colors.white, fontSize: 23, fontWeight: "900", marginTop: 8, maxWidth: "75%" },
+  todayFoot: { marginTop: "auto", paddingTop: 16 },
+  count: {
+    color: colors.cyan,
+    fontSize: 11,
+    fontWeight: "900",
+    paddingHorizontal: 9,
+    paddingVertical: 3,
+    borderRadius: 99,
+    overflow: "hidden",
+    backgroundColor: "rgba(94, 234, 212, 0.14)",
+  },
+  play: { width: 56, height: 56, borderRadius: 28, alignItems: "center", justifyContent: "center", backgroundColor: colors.cyanStrong },
+  playGlyph: { color: "#041126", fontSize: 20, marginLeft: 3 },
+  programme: { flexDirection: "row", alignItems: "center", gap: 12, marginTop: 12 },
+  programmeText: { flex: 1, minWidth: 0 },
+  programmeTitle: { color: colors.white, fontSize: 15, fontWeight: "900" },
 } as const;
 
 export default function AthleteHomeScreen() {

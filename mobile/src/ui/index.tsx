@@ -1,5 +1,6 @@
 import {
   ActivityIndicator,
+  Image,
   Pressable,
   SafeAreaView,
   ScrollView,
@@ -30,9 +31,11 @@ interface ScreenProps {
   children: ReactNode;
   tone?: "default" | "soft";
   testID?: string;
+  /** Pinned below the scrolling content, e.g. a tab bar or a Continue button. */
+  footer?: ReactNode;
 }
 
-export function Screen({ children, tone = "default", testID }: ScreenProps) {
+export function Screen({ children, tone = "default", testID, footer }: ScreenProps) {
   return (
     <SafeAreaView
       style={[styles.safeArea, tone === "soft" && styles.softArea]}
@@ -42,10 +45,24 @@ export function Screen({ children, tone = "default", testID }: ScreenProps) {
       <ScrollView
         contentContainerStyle={styles.content}
         showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
       >
         {children}
       </ScrollView>
+      {footer}
     </SafeAreaView>
+  );
+}
+
+/** Horizontal white logo for dark headers. */
+export function Wordmark({ height = 28 }: { height?: number }) {
+  return (
+    <Image
+      source={require("../../assets/fearless-wordmark.png")}
+      accessibilityLabel="Fearless Footballer"
+      resizeMode="contain"
+      style={{ height, width: height * 4.79 }}
+    />
   );
 }
 

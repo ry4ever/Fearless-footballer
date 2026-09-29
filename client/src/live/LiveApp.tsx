@@ -1,24 +1,24 @@
 import { useState } from "react";
 import type { SessionPackage } from "@shared/types";
-import { BottomNavBar, type NavTab } from "../components/BottomNavBar";
 import { OnboardingScreen } from "../screens/OnboardingScreen";
 import { AthleteLinkScreen } from "./AthleteLinkScreen";
 import { AuthScreen } from "./AuthScreen";
 import { CaregiverLinkScreen } from "./CaregiverLinkScreen";
 import { LiveCompleteScreen } from "./LiveCompleteScreen";
 import { LiveHQScreen } from "./LiveHQScreen";
+import { LiveNav, type LiveTab } from "./LiveNav";
 import { LiveParentDashboard } from "./LiveParentDashboard";
 import { LivePlayerScreen, type CompletionOutcome } from "./LivePlayerScreen";
 import { LiveProfileScreen } from "./LiveProfileScreen";
+import { LiveProgressScreen } from "./LiveProgressScreen";
+import { LiveTrainingScreen } from "./LiveTrainingScreen";
 import { loadPlan, savePlan } from "./plan";
 import { isLinkActive, SessionProvider, useSession } from "./session";
 import "./live.css";
-
-/** Only the tabs that have real content behind them yet. */
-const ATHLETE_TABS: NavTab[] = ["hq", "profile"];
+import "./athlete.css";
 
 type AthleteView =
-  | { name: "main"; tab: NavTab }
+  | { name: "main"; tab: LiveTab }
   | { name: "onboarding" }
   | { name: "player"; session: SessionPackage }
   | { name: "complete"; outcome: CompletionOutcome };
@@ -37,10 +37,10 @@ function Loading() {
 function AthleteApp() {
   const { user } = useSession();
   const [view, setView] = useState<AthleteView>(() =>
-    user && loadPlan(user.id) ? { name: "main", tab: "hq" } : { name: "onboarding" },
+    user && loadPlan(user.id) ? { name: "main", tab: "home" } : { name: "onboarding" },
   );
   if (!user) return null;
-  const toHQ = () => setView({ name: "main", tab: "hq" });
+  const toHQ = () => setView({ name: "main", tab: "home" });
 
   switch (view.name) {
     case "onboarding":
@@ -62,17 +62,19 @@ function AthleteApp() {
       );
     case "complete":
       return <LiveCompleteScreen outcome={view.outcome} onBackToHQ={toHQ} />;
-    case "main":
+    case "main": {
+      const start = (session: SessionPackage) => setView({ name: "player", session });
+      const openTab = (tab: LiveTab) => setView({ name: "main", tab });
       return (
         <>
-          {view.tab === "profile" ? (
-            <LiveProfileScreen onEditPlan={() => setView({ name: "onboarding" })} />
-          ) : (
-            <LiveHQScreen onStartSession={(session) => setView({ name: "player", session })} />
-          )}
-          <BottomNavBar activeTab={view.tab} tabs={ATHLETE_TABS} onSelectTab={(tab) => setView({ name: "main", tab })} />
+          {view.tab === "home" && <LiveHQScreen onStartSession={start} onOpenTab={openTab} />}
+          {view.tab === "training" && <LiveTrainingScreen onStartSession={start} />}
+          {view.tab === "progress" && <LiveProgressScreen />}
+          {view.tab === "more" && <LiveProfileScreen onEditPlan={() => setView({ name: "onboarding" })} />}
+          <LiveNav active={view.tab} onSelect={openTab} />
         </>
       );
+    }
   }
 }
 

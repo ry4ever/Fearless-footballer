@@ -210,3 +210,8 @@ export function FearlessHeaderLogo({
     </div>
   );
 }
+
+/** Horizontal white logo for dark headers. */
+export function FearlessWordmark({ height = 30 }: { height?: number }) {
+  return <img src="/assets/fearless-wordmark.png" alt="Fearless Footballer" style={{ display: "block", alignSelf: "flex-start", height, width: "auto" }} />;
+}

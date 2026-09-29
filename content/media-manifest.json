@@ -309,5 +309,42 @@
       }
     }
   },
-  "videos": {}
+  "videos": {
+    "back-to-your-best": {
+      "key": "video/back-to-your-best/why-this-works.mp4",
+      "bytes": 3293165,
+      "durationSeconds": 27,
+      "uploaded": true
+    },
+    "better-final-ball": {
+      "key": "video/better-final-ball/why-this-works.mp4",
+      "bytes": 7918148,
+      "durationSeconds": 52,
+      "uploaded": true
+    },
+    "defensive-aerial-duels": {
+      "key": "video/defensive-aerial-duels/why-this-works.mp4",
+      "bytes": 4291082,
+      "durationSeconds": 34,
+      "uploaded": true
+    },
+    "ice-cold-finisher": {
+      "key": "video/ice-cold-finisher/why-this-works.mp4",
+      "bytes": 5150173,
+      "durationSeconds": 44,
+      "uploaded": true
+    },
+    "play-your-next-game": {
+      "key": "video/play-your-next-game/why-this-works.mp4",
+      "bytes": 5451275,
+      "durationSeconds": 45,
+      "uploaded": true
+    },
+    "scanning-and-awareness": {
+      "key": "video/scanning-and-awareness/why-this-works.mp4",
+      "bytes": 9142927,
+      "durationSeconds": 72,
+      "uploaded": true
+    }
+  }
 }

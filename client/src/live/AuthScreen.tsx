@@ -1,6 +1,6 @@
 import { useState, type FormEvent } from "react";
 import type { BetaUserRole } from "@shared/types";
-import { FearlessHeaderLogo } from "../components/icons/CustomIcons";
+import { FearlessWordmark } from "../components/icons/CustomIcons";
 import { apiClient } from "../lib/apiClient";
 
 type Mode = "sign-in" | "register";
@@ -60,7 +60,7 @@ export function AuthScreen() {
 
   return (
     <div className="screen live-screen no-nav">
-      <FearlessHeaderLogo subtitle="HQ" size="md" />
+      <FearlessWordmark />
 
       <div>
         <span className="eyebrow">{registering ? "CREATE YOUR ACCOUNT" : "WELCOME BACK"}</span>

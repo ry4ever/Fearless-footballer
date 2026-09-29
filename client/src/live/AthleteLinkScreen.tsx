@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import type { PairingCodeResponse } from "@shared/types";
-import { FearlessHeaderLogo } from "../components/icons/CustomIcons";
+import { FearlessWordmark } from "../components/icons/CustomIcons";
 import { apiClient } from "../lib/apiClient";
 import { useSession } from "./session";
 
@@ -63,7 +63,7 @@ export function AthleteLinkScreen() {
 
   return (
     <div className="screen live-screen no-nav">
-      <FearlessHeaderLogo subtitle="HQ" size="md" />
+      <FearlessWordmark />
 
       <div>
         <span className="eyebrow">HI {user?.displayName.toUpperCase()}</span>

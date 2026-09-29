@@ -10,7 +10,9 @@ import path from "node:path";
  */
 
 export function hasFfmpeg(): boolean {
-  const result = spawnSync("ffmpeg", ["-version"], { stdio: "ignore", shell: process.platform === "win32" });
+  // One fixed command string (no user input), so running it through the shell
+  // is safe; the shell lets Windows find Chocolatey's ffmpeg shim.
+  const result = spawnSync("ffmpeg -version", { stdio: "ignore", shell: true });
   return result.status === 0;
 }
 

@@ -125,3 +125,6 @@ mobile/*.png
 project_details/Sessions/
 project_details/Recipe_s/
 project_details/Images/
+
+# Shrunk videos made by scripts/uploadContent.ts
+.content-cache/

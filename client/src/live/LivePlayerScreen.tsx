@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { ArrowLeft, ArrowRight, Check, Headphones, Pause, Play, RotateCcw } from "lucide-react";
+import { ArrowLeft, ArrowRight, Check, CirclePlay, Headphones, Pause, Play, RotateCcw, X } from "lucide-react";
 import type {
   CompletionSyncResponse,
   PlaybackEventRequest,
@@ -162,6 +162,7 @@ function PlayerCore({ session, variant, versionBar, onBack, onComplete }: Player
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState("");
   const [avatarFailed, setAvatarFailed] = useState(false);
+  const [showVideo, setShowVideo] = useState(false);
 
   const voiceRef = useRef<HTMLAudioElement | null>(null);
   const musicRef = useRef<HTMLAudioElement | null>(null);
@@ -298,6 +299,16 @@ function PlayerCore({ session, variant, versionBar, onBack, onComplete }: Player
   useEffect(() => {
     audioEngine.setMediaSessionPlaying(playing);
   }, [playing]);
+
+  // Video dialog closes on Escape.
+  useEffect(() => {
+    if (!showVideo) return;
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setShowVideo(false);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [showVideo]);
 
   // Reflection dialog: focus it and close on Escape.
   useEffect(() => {
@@ -532,8 +543,44 @@ function PlayerCore({ session, variant, versionBar, onBack, onComplete }: Player
               Keep going – {Math.ceil(remainingToQualify / 60)} more min to complete this rep.
             </p>
           )}
+          {session.whyVideoUrl && (
+            <button
+              type="button"
+              className="why-video-link"
+              onClick={() => {
+                // Pause the session so Mark's video and voice don't overlap.
+                setPlaying(false);
+                setShowVideo(true);
+              }}
+            >
+              <CirclePlay size={16} /> Why this works?
+            </button>
+          )}
         </div>
       </main>
+
+      {showVideo && session.whyVideoUrl && (
+        <div
+          className="modal-overlay why-video-overlay"
+          style={{ zIndex: 110 }}
+          onClick={(event) => {
+            if (event.target === event.currentTarget) setShowVideo(false);
+          }}
+        >
+          <div className="why-video-dialog" role="dialog" aria-modal="true" aria-label="Why this works">
+            <button
+              type="button"
+              className="why-video-close"
+              onClick={() => setShowVideo(false)}
+              aria-label="Close video"
+              autoFocus
+            >
+              <X size={20} />
+            </button>
+            <video src={session.whyVideoUrl} controls autoPlay playsInline preload="metadata" />
+          </div>
+        </div>
+      )}
 
       {showReflection && (
         <div className="modal-overlay" style={{ zIndex: 100 }}>

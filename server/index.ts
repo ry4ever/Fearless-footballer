@@ -410,6 +410,7 @@ function toSessionPackage(session: SessionWithPackageParts): SessionPackage {
     descriptionMarkdown: session.descriptionMarkdown ?? undefined,
     comingSoon: session.comingSoon || undefined,
     audio: session.comingSoon ? undefined : audio,
+    whyVideoUrl: session.videoUrl ? mediaUrl(session.videoUrl) : undefined,
   };
 }
 

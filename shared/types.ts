@@ -101,6 +101,8 @@ export interface SessionPackage {
   comingSoon?: boolean;
   /** Each recorded version; absent for older single-file sessions. */
   audio?: SessionAudioVariant[];
+  /** "Why this works?" video, when the session has one. */
+  whyVideoUrl?: string;
   phases: SessionPhase[];
   prompts: SessionPrompt[];
 }

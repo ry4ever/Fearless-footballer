@@ -25,8 +25,6 @@ export interface CatalogSession {
   video?: string;
   /** Short labels shown under the title in the player. */
   tags: string[];
-  /** "Today you're working on" points. */
-  workingOn: string[];
   descriptionMarkdown: string | null;
 }
 
@@ -79,7 +77,6 @@ export function readCatalog(root: string): { sessions: CatalogSession[]; program
       audio: meta.audio ?? null,
       video: typeof meta.video === "string" ? meta.video : undefined,
       tags: stringList(meta.tags),
-      workingOn: stringList(meta.workingOn),
       descriptionMarkdown: existsSync(descriptionPath) ? playerFacing(readFileSync(descriptionPath, "utf8")) : null,
     });
   }

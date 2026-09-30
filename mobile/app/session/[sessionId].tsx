@@ -22,7 +22,7 @@ import {
 import { AthleteRouteGuard } from "../../src/session";
 import { WhyVideoModal } from "../../src/ui/WhyVideo";
 import { photos } from "../../src/ui/photos";
-import { sessionPhoto, sessionTagLine, splitTitle, videoLengthLabel } from "../../../shared/player";
+import { sessionPhoto, sessionTags, splitTitle, videoLengthLabel } from "../../../shared/player";
 import { Button, Screen, StatusCard, Wordmark, colors } from "../../src/ui";
 import type { PlaybackEventRequest, SessionAudioVariant, SessionMode, SessionPackage } from "../../../shared/types";
 import {
@@ -45,8 +45,8 @@ import {
 import { fonts } from "../../src/ui/fonts";
 
 /**
- * The training session: session image and title, Mark's video introduction,
- * what they're working on, then training style and backing music (which
+ * The training session: session image, title and tags, Mark's video
+ * introduction, then training style and backing music (which
  * pick one of the recordings), a simple player, and Reflect once it's done.
  */
 function PlayerScreen({
@@ -290,7 +290,7 @@ function PlayerScreen({
   }
 
   const [titleTop, titleBottom] = splitTitle(session.title);
-  const tagLine = sessionTagLine(session);
+  const tags = sessionTags(session);
   const videoLength = videoLengthLabel(session.whyVideoDurationSeconds);
   const modes = availableModes(session);
   const progressRatio = duration > 0 ? currentTime / duration : 0;
@@ -319,7 +319,17 @@ function PlayerScreen({
             {titleTop}
             {titleBottom ? <Text style={styles.titleAccent}>{`\n${titleBottom}`}</Text> : null}
           </Text>
-          {tagLine ? <Text style={styles.tags}>{tagLine.toUpperCase()}</Text> : null}
+          {tags.length ? (
+            // Each tag stays on one line; the row wraps between tags.
+            <View style={styles.tags} accessibilityLabel={tags.join(", ")}>
+              {tags.map((tag, index) => (
+                <Text key={tag} style={styles.tag}>
+                  {tag.toUpperCase()}
+                  {index < tags.length - 1 ? "  ·  " : ""}
+                </Text>
+              ))}
+            </View>
+          ) : null}
         </View>
       </View>
 
@@ -356,12 +366,6 @@ function PlayerScreen({
         </Pressable>
       ) : null}
 
-      {session.workingOn?.length ? (
-        <View style={styles.working}>
-          <Text style={styles.eyebrow}>TODAY YOU'RE WORKING ON</Text>
-          <Text style={styles.workingText}>{session.workingOn.join(" · ")}</Text>
-        </View>
-      ) : null}
 
       {variant && modes.length > 0 ? (
         <View style={styles.section} testID="training-style">
@@ -568,7 +572,8 @@ const styles = {
   eyebrow: { fontFamily: fonts.w700, color: "#9AB5DC", fontSize: 11, letterSpacing: 2.4 },
   title: { fontFamily: fonts.w800, color: colors.white, fontSize: 38, lineHeight: 42, marginTop: 8 },
   titleAccent: { color: colors.cyan },
-  tags: { fontFamily: fonts.w700, color: "#B8C9E4", fontSize: 11, letterSpacing: 2.2, marginTop: 10 },
+  tags: { flexDirection: "row", flexWrap: "wrap", rowGap: 4, marginTop: 10 },
+  tag: { fontFamily: fonts.w700, color: "#B8C9E4", fontSize: 11, letterSpacing: 2.2 },
   video: {
     flexDirection: "row",
     minHeight: 104,
@@ -597,16 +602,6 @@ const styles = {
   videoTitle: { fontFamily: fonts.w700, color: colors.white, fontSize: 15, lineHeight: 20 },
   videoLength: { fontFamily: fonts.w700, color: "#9AB5DC", fontSize: 11, letterSpacing: 1.8 },
   chevron: { alignSelf: "center", marginRight: 14, color: colors.cyan, fontSize: 26 },
-  working: {
-    marginBottom: 20,
-    paddingVertical: 14,
-    paddingHorizontal: 16,
-    borderLeftWidth: 3,
-    borderLeftColor: colors.cyanStrong,
-    borderRadius: 12,
-    backgroundColor: "rgba(0, 139, 206, 0.1)",
-  },
-  workingText: { fontFamily: fonts.w600, color: colors.white, fontSize: 14.5, lineHeight: 21, marginTop: 8 },
   section: { marginBottom: 18 },
   sectionLabel: { marginBottom: 12 },
   styles: { flexDirection: "row", gap: 8 },

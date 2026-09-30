@@ -17,6 +17,7 @@ import { LoadingRow, Screen, StatusCard, Wordmark, colors } from "../../src/ui";
 import { hq } from "../../src/ui/hqStyles";
 import { photos } from "../../src/ui/photos";
 import { TabBar } from "../../src/ui/TabBar";
+import { fonts } from "../../src/ui/fonts";
 
 function AthleteHomeContent() {
   const router = useRouter();
@@ -174,9 +175,12 @@ function AthleteHomeContent() {
               style={({ pressed }) => [styles.programme, pressed && hq.pressed]}
               testID={`programme-${view.programme.slug}`}
             >
-              <Image source={photos[programmePhoto(view.programme.slug)]} style={hq.thumb} resizeMode="cover" />
+              <View style={hq.banner}>
+                <Image source={photos[programmePhoto(view.programme.slug)]} style={hq.bannerPhoto} resizeMode="cover" />
+                <View style={hq.bannerShade} />
+                <Text style={hq.bannerTitle}>{view.programme.title}</Text>
+              </View>
               <View style={styles.programmeText}>
-                <Text style={styles.programmeTitle}>{view.programme.title}</Text>
                 <Text style={hq.small} numberOfLines={1}>
                   {view.sessions.map((item) => item.title).join(" · ")}
                 </Text>
@@ -199,7 +203,7 @@ const styles = {
   header: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
   headerActions: { flexDirection: "row", alignItems: "center", gap: 10 },
   iconButton: { width: 40, height: 40, borderRadius: 20, alignItems: "center", justifyContent: "center", backgroundColor: "rgba(14, 32, 72, 0.6)" },
-  iconGlyph: { fontSize: 16 },
+  iconGlyph: { fontFamily: fonts.w400, fontSize: 16 },
   avatar: {
     width: 40,
     height: 40,
@@ -208,17 +212,18 @@ const styles = {
     borderColor: colors.cyan,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "rgba(94, 234, 212, 0.12)",
+    backgroundColor: "rgba(105, 224, 250, 0.12)",
   },
-  avatarText: { color: colors.cyan, fontSize: 17, fontWeight: "900" },
+  avatarText: { fontFamily: fonts.w900, color: colors.cyan, fontSize: 17 },
   popover: {
+    fontFamily: fonts.w400,
     alignSelf: "flex-end",
     marginTop: 8,
     paddingHorizontal: 14,
     paddingVertical: 10,
     borderRadius: 14,
     borderWidth: 1,
-    borderColor: "rgba(94, 234, 212, 0.3)",
+    borderColor: "rgba(105, 224, 250, 0.3)",
     backgroundColor: "#0D1A3A",
     color: "#CFE0F7",
     fontSize: 13,
@@ -229,30 +234,29 @@ const styles = {
   focusText: { padding: 16, maxWidth: "62%" },
   streak: { flexDirection: "row", alignItems: "center", gap: 12 },
   flame: { width: 42, height: 42, borderRadius: 13, alignItems: "center", justifyContent: "center", backgroundColor: "rgba(255, 124, 64, 0.16)" },
-  flameGlyph: { fontSize: 20 },
-  streakValue: { color: colors.white, fontSize: 21, fontWeight: "900", marginTop: 3 },
-  chevron: { color: "#7A91B8", fontSize: 22, fontWeight: "700" },
-  today: { minHeight: 190, padding: 0, borderColor: "rgba(94, 234, 212, 0.55)" },
+  flameGlyph: { fontFamily: fonts.w400, fontSize: 20 },
+  streakValue: { fontFamily: fonts.w900, color: colors.white, fontSize: 21, marginTop: 3 },
+  chevron: { fontFamily: fonts.w700, color: "#7A91B8", fontSize: 22 },
+  today: { minHeight: 190, padding: 0, borderColor: "rgba(105, 224, 250, 0.55)" },
   todayPhoto: { position: "absolute", top: 0, right: 0, bottom: 0, width: "70%", height: "100%" },
   todayShade: { position: "absolute", top: 0, right: 0, bottom: 0, left: 0, backgroundColor: "rgba(5, 10, 25, 0.45)" },
   todayBody: { flex: 1, minHeight: 190, padding: 16 },
-  todayTitle: { color: colors.white, fontSize: 23, fontWeight: "900", marginTop: 8, maxWidth: "75%" },
+  todayTitle: { fontFamily: fonts.w900, color: colors.white, fontSize: 23, marginTop: 8, maxWidth: "75%" },
   todayFoot: { marginTop: "auto", paddingTop: 16 },
   count: {
+    fontFamily: fonts.w900,
     color: colors.cyan,
     fontSize: 11,
-    fontWeight: "900",
     paddingHorizontal: 9,
     paddingVertical: 3,
     borderRadius: 99,
     overflow: "hidden",
-    backgroundColor: "rgba(94, 234, 212, 0.14)",
+    backgroundColor: "rgba(105, 224, 250, 0.14)",
   },
   play: { width: 56, height: 56, borderRadius: 28, alignItems: "center", justifyContent: "center", backgroundColor: colors.cyanStrong },
-  playGlyph: { color: "#041126", fontSize: 20, marginLeft: 3 },
-  programme: { flexDirection: "row", alignItems: "center", gap: 12, marginTop: 12 },
-  programmeText: { flex: 1, minWidth: 0 },
-  programmeTitle: { color: colors.white, fontSize: 15, fontWeight: "900" },
+  playGlyph: { fontFamily: fonts.w400, color: "#041126", fontSize: 20, marginLeft: 3 },
+  programme: { marginTop: 12 },
+  programmeText: { marginTop: 8 },
 } as const;
 
 export default function AthleteHomeScreen() {

@@ -103,17 +103,17 @@ export function HQScreen({
         <span className="eyebrow">GOOD EVENING, ALEX</span>
         <div style={{ display: "flex", alignItems: "center", gap: "8px", marginTop: "2px" }}>
           <h1 style={{ margin: 0 }}>Fearless HQ</h1>
-          <span style={{ fontSize: "0.75rem", background: "rgba(0,240,255,0.15)", color: "#00F0FF", padding: "2px 8px", borderRadius: "100px", fontWeight: 700 }}>
+          <span style={{ fontSize: "0.75rem", background: "rgba(105,224,250,0.15)", color: "#69E0FA", padding: "2px 8px", borderRadius: "100px", fontWeight: 700 }}>
             Striker · U14
           </span>
         </div>
       </section>
 
       {/* Question 1: What am I working on? (Current Focus) */}
-      <section className="current-focus-banner" style={{ background: "rgba(15, 23, 42, 0.7)", border: "1px solid rgba(0, 240, 255, 0.25)", borderRadius: "14px", padding: "14px 18px", margin: "14px 0" }}>
+      <section className="current-focus-banner" style={{ background: "rgba(15, 23, 42, 0.7)", border: "1px solid rgba(105, 224, 250, 0.25)", borderRadius: "14px", padding: "14px 18px", margin: "14px 0" }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
           <div>
-            <span className="eyebrow" style={{ color: "#00F0FF", fontSize: "0.7rem", letterSpacing: "1.2px", textTransform: "uppercase" }}>
+            <span className="eyebrow" style={{ color: "#69E0FA", fontSize: "0.7rem", letterSpacing: "1.2px", textTransform: "uppercase" }}>
               YOUR CURRENT FOCUS
             </span>
             <h3 style={{ color: "#fff", fontSize: "1.05rem", fontWeight: 800, margin: "2px 0 0 0" }}>
@@ -126,7 +126,7 @@ export function HQScreen({
           <button
             type="button"
             onClick={onOpenSetup}
-            style={{ background: "transparent", border: "none", color: "#00F0FF", cursor: "pointer", display: "flex", alignItems: "center", gap: "4px", fontSize: "0.75rem", fontWeight: 700 }}
+            style={{ background: "transparent", border: "none", color: "#69E0FA", cursor: "pointer", display: "flex", alignItems: "center", gap: "4px", fontSize: "0.75rem", fontWeight: 700 }}
           >
             Plan <ArrowRight size={13} />
           </button>
@@ -154,7 +154,7 @@ export function HQScreen({
                 <div className="gauge-inner">
                   <span className="gauge-label">TRAINING SCORE</span>
                   <strong className="gauge-number">82</strong>
-                  <span style={{ fontSize: "0.65rem", color: "#00F0FF", fontWeight: 700, textTransform: "uppercase" }}>High Consistency</span>
+                  <span style={{ fontSize: "0.65rem", color: "#69E0FA", fontWeight: 700, textTransform: "uppercase" }}>High Consistency</span>
                 </div>
               </div>
             </div>
@@ -226,7 +226,7 @@ export function HQScreen({
           </div>
 
           <div className="rep-meta">
-            <span style={{ color: "#00F0FF", fontWeight: 700 }}>Tactical</span>
+            <span style={{ color: "#69E0FA", fontWeight: 700 }}>Tactical</span>
             <span className="meta-divider">|</span>
             <span className="composure-tag"><Footprints size={14} /> Movement</span>
             <span className="meta-divider">|</span>
@@ -256,7 +256,7 @@ export function HQScreen({
           <div style={{ background: "rgba(255,255,255,0.03)", padding: "10px 14px", borderRadius: "10px", border: "1px solid rgba(255,255,255,0.05)" }}>
             <span style={{ fontSize: "0.75rem", color: "rgba(255,255,255,0.6)" }}>This Week</span>
             <strong style={{ display: "block", color: "#fff", fontSize: "1.1rem", fontWeight: 800 }}>3 of 4 Sessions</strong>
-            <small style={{ color: "#00F0FF", fontSize: "0.7rem" }}>On track for matchday</small>
+            <small style={{ color: "#69E0FA", fontSize: "0.7rem" }}>On track for matchday</small>
           </div>
           <div style={{ background: "rgba(255,255,255,0.03)", padding: "10px 14px", borderRadius: "10px", border: "1px solid rgba(255,255,255,0.05)" }}>
             <span style={{ fontSize: "0.75rem", color: "rgba(255,255,255,0.6)" }}>Next Match</span>
@@ -335,7 +335,7 @@ export function HQScreen({
           <span className="eyebrow section-eyebrow" style={{ color: "#fff", fontWeight: 700 }}>
             CHOOSE WHAT TO WORK ON
           </span>
-          <span style={{ fontSize: "0.75rem", color: "#00F0FF" }}>Training Library</span>
+          <span style={{ fontSize: "0.75rem", color: "#69E0FA" }}>Training Library</span>
         </div>
 
         <div className="mindset-pill-track">

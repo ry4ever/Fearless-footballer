@@ -13,7 +13,7 @@
   width: 360px;
   height: 360px;
   pointer-events: none;
-  background: radial-gradient(circle, rgba(0, 155, 238, 0.28), transparent 68%);
+  background: radial-gradient(circle, rgba(0, 139, 206, 0.28), transparent 68%);
 }
 .ob-hero {
   position: absolute;
@@ -55,10 +55,11 @@
 .ob-step-5 .ob-title { max-width: none; }
 .ob-title h1 {
   margin: 0;
-  font-family: 'Space Grotesk', sans-serif;
-  font-size: 30px;
-  line-height: 1.02;
-  letter-spacing: -0.04em;
+  font-family: 'Montserrat', sans-serif;
+  font-size: 28px;
+  font-weight: 900;
+  line-height: 1.05;
+  letter-spacing: -0.02em;
   text-transform: uppercase;
 }
 .ob-accent { color: var(--cyan); }
@@ -104,7 +105,7 @@
 .ob-position-card .ob-check.checked { background: var(--cyan); }
 .ob-position-card.selected { border-color: var(--cyan); box-shadow: 0 0 22px rgba(105, 224, 250, 0.25); }
 .ob-position-text { position: absolute; left: 12px; right: 12px; bottom: 11px; z-index: 2; }
-.ob-position-text strong { display: block; font-family: 'Space Grotesk', sans-serif; font-size: 17px; letter-spacing: -0.03em; }
+.ob-position-text strong { display: block; font-size: 16px; font-weight: 800; }
 .ob-position-text small { display: block; margin-top: 2px; color: var(--cyan); font-size: 11px; font-weight: 700; letter-spacing: 0.08em; }
 
 /* Steps 2–4: rows */
@@ -126,7 +127,7 @@
   transition: border-color 0.16s var(--ease-out), background 0.16s var(--ease-out), opacity 0.16s var(--ease-out);
 }
 .ob-photo-row strong,
-.ob-icon-row strong { flex: 1; font-size: 14.5px; line-height: 1.25; }
+.ob-icon-row strong { flex: 1; font-size: 14px; font-weight: 700; line-height: 1.25; }
 .ob-photo-row img { flex: 0 0 64px; width: 64px; height: 44px; border-radius: 10px; object-fit: cover; }
 .ob-photo-row.selected,
 .ob-icon-row.selected { border-color: var(--cyan); background: linear-gradient(100deg, rgba(0, 139, 206, 0.28), rgba(13, 26, 58, 0.85)); }
@@ -166,7 +167,7 @@
   border: 1.5px solid rgba(105, 224, 250, 0.5);
   border-radius: 20px;
   background: #0b1635;
-  box-shadow: 0 12px 34px rgba(0, 201, 239, 0.14);
+  box-shadow: 0 12px 34px rgba(0, 139, 206, 0.14);
 }
 .ob-plan-card img { display: block; width: 100%; height: 150px; object-fit: cover; object-position: center 30%; }
 .ob-plan-body { padding: 16px 16px 18px; }
@@ -181,7 +182,7 @@
   letter-spacing: 0.12em;
   text-transform: uppercase;
 }
-.ob-plan-body h2 { margin: 12px 0 10px; font-family: 'Space Grotesk', sans-serif; font-size: 22px; line-height: 1.1; letter-spacing: -0.03em; }
+.ob-plan-body h2 { margin: 12px 0 10px; font-size: 21px; font-weight: 800; line-height: 1.15; }
 .ob-plan-body ul { display: grid; gap: 6px; margin: 0; padding: 0; list-style: none; }
 .ob-plan-body li { display: flex; align-items: center; gap: 8px; color: #d4e2f5; font-size: 13.5px; }
 .ob-plan-body li svg { color: var(--cyan); flex: 0 0 auto; }
@@ -204,8 +205,8 @@
   min-height: 54px;
   border-radius: 16px;
   color: #041126;
-  background: linear-gradient(135deg, #84edff, #22c9ec);
-  box-shadow: 0 10px 28px rgba(0, 201, 239, 0.28);
+  background: linear-gradient(135deg, #69e0fa, #008bce);
+  box-shadow: 0 10px 28px rgba(0, 139, 206, 0.28);
   font-size: 16px;
   font-weight: 800;
   cursor: pointer;

@@ -158,3 +158,34 @@ export function computeAthleteMetrics(
     weekStartKey: shiftDayKey(todayKey, 1 - dayOfWeek),
   };
 }
+
+/** Local Monday (YYYY-MM-DD) of the week containing `dayKey`. */
+export function weekStartOf(dayKey: string): string {
+  const dayOfWeek = new Date(`${dayKey}T00:00:00.000Z`).getUTCDay() || 7;
+  return shiftDayKey(dayKey, 1 - dayOfWeek);
+}
+
+/**
+ * Weeks in a row (Monday to Sunday, local time) with at least one completed
+ * session, ending this week – or last week, while this week has none yet.
+ */
+export function consecutiveTrainingWeeks(
+  completions: Date[],
+  timezone: string | null | undefined,
+  now: Date
+): number {
+  const tz = resolveTimezone(timezone);
+  const weeks = new Set(
+    completions
+      .filter(date => date.getTime() <= now.getTime())
+      .map(date => weekStartOf(localDayKey(date, tz)))
+  );
+  let cursor = weekStartOf(localDayKey(now, tz));
+  if (!weeks.has(cursor)) cursor = shiftDayKey(cursor, -7);
+  let count = 0;
+  while (weeks.has(cursor)) {
+    count += 1;
+    cursor = shiftDayKey(cursor, -7);
+  }
+  return count;
+}

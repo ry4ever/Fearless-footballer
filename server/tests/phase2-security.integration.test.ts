@@ -540,6 +540,9 @@ describe.skipIf(!process.env.DATABASE_URL)("Phase 2 Security Integration Tests",
       expect(progress.lastRep.title).toBe("Library Playable");
       expect(progress.completedSessionIds).toEqual([playable.id]);
       expect(progress.completedTodaySessionIds).toEqual([playable.id]);
+      expect(progress.totalCompletions).toBe(1);
+      expect(progress.consecutiveWeeks).toBe(1);
+      expect(progress.completionsByArea).toEqual([{ area: "Sharpen Your Game", count: 1 }]);
 
       // Programmes aren't removed with their sessions; don't leave this one behind.
       await prisma.programme.delete({ where: { slug: `library-programme-${stamp}` } });

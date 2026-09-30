@@ -116,7 +116,7 @@ export function LiveParentDashboard({ link }: LiveParentDashboardProps) {
         <section className="athlete-identity" aria-label="Linked player">
           <div className="athlete-avatar">{initials(athlete.name)}</div>
           <div>
-            <span className="eyebrow" style={{ color: "#00F0FF", letterSpacing: "0.08em" }}>
+            <span className="eyebrow" style={{ color: "#69E0FA", letterSpacing: "0.08em" }}>
               {firstName.toUpperCase()}'S OFF-PITCH TRAINING
             </span>
             <h1>{athlete.name}</h1>
@@ -135,7 +135,7 @@ export function LiveParentDashboard({ link }: LiveParentDashboardProps) {
                 Trained {weeklySummary.daysCompleted} of {weeklySummary.daysTarget} days
               </h2>
             </div>
-            <CalendarDays size={22} color="#00F0FF" />
+            <CalendarDays size={22} color="#69E0FA" />
           </div>
           <p className="live-copy">{weeklySummary.description}</p>
           <div className="week-dots" aria-hidden="true">

@@ -12,6 +12,7 @@ import {
   Screen,
   colors,
 } from "../../src/ui";
+import { fonts } from "../../src/ui/fonts";
 
 type Mode = "register" | "signin";
 
@@ -228,7 +229,7 @@ const styles = {
     borderColor: colors.cyan,
     backgroundColor: "#122544",
   },
-  modeText: { color: colors.muted, fontSize: 15, fontWeight: "800" },
+  modeText: { fontFamily: fonts.w800, color: colors.muted, fontSize: 15 },
   modeTextActive: { color: colors.cyan },
   pressed: { opacity: 0.8 },
   acknowledgement: {
@@ -244,6 +245,7 @@ const styles = {
   },
   acknowledgementChecked: { borderColor: colors.cyan },
   acknowledgementCopy: {
+    fontFamily: fonts.w400,
     color: colors.muted,
     fontSize: 14,
     lineHeight: 20,
@@ -266,5 +268,5 @@ const styles = {
     borderRadius: 1,
     backgroundColor: colors.cyan,
   },
-  errorText: { color: colors.danger, fontSize: 14, marginBottom: 12 },
+  errorText: { fontFamily: fonts.w400, color: colors.danger, fontSize: 14, marginBottom: 12 },
 };

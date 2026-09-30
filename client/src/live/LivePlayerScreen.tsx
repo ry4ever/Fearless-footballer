@@ -400,7 +400,7 @@ function PlayerCore({ session, variant, versionBar, onBack, onComplete }: Player
             className="icon-button"
             onClick={() => setMusic((value) => !value)}
             aria-pressed={music}
-            style={{ width: "auto", minHeight: 36, background: "rgba(255,255,255,0.08)", border: "none", color: "#00F0FF", padding: "6px 12px", borderRadius: 100, fontSize: "0.75rem", fontWeight: 700, whiteSpace: "nowrap" }}
+            style={{ width: "auto", minHeight: 36, background: "rgba(255,255,255,0.08)", border: "none", color: "#69E0FA", padding: "6px 12px", borderRadius: 100, fontSize: "0.75rem", fontWeight: 700, whiteSpace: "nowrap" }}
           >
             Music {music ? "on" : "off"}
           </button>
@@ -429,9 +429,9 @@ function PlayerCore({ session, variant, versionBar, onBack, onComplete }: Player
                     padding: "8px 6px",
                     borderRadius: 8,
                     textAlign: "center",
-                    background: isActive ? "rgba(0,240,255,0.15)" : isPast ? "rgba(255,255,255,0.06)" : "rgba(255,255,255,0.02)",
-                    border: isActive ? "1.5px solid #00F0FF" : "1px solid rgba(255,255,255,0.08)",
-                    color: isActive ? "#00F0FF" : isPast ? "#fff" : "rgba(255,255,255,0.5)",
+                    background: isActive ? "rgba(105,224,250,0.15)" : isPast ? "rgba(255,255,255,0.06)" : "rgba(255,255,255,0.02)",
+                    border: isActive ? "1.5px solid #69E0FA" : "1px solid rgba(255,255,255,0.08)",
+                    color: isActive ? "#69E0FA" : isPast ? "#fff" : "rgba(255,255,255,0.5)",
                     fontSize: "0.75rem",
                     fontWeight: 800,
                     letterSpacing: 1,
@@ -593,7 +593,7 @@ function PlayerCore({ session, variant, versionBar, onBack, onComplete }: Player
                     <strong>{item.label}</strong>
                     <small>{item.desc}</small>
                   </span>
-                  {feeling === item.id && <Check size={16} color="#00F0FF" />}
+                  {feeling === item.id && <Check size={16} color="#69E0FA" />}
                 </button>
               ))}
             </div>

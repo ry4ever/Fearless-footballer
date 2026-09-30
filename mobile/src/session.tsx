@@ -17,6 +17,7 @@ import {
   type LoadedSessionState,
 } from "./lib/sessionStore";
 import { getApiFacade, getSessionApiFacade } from "./lib/apiFacade";
+import { fonts } from "./ui/fonts";
 
 interface SessionContextValue {
   state: LoadedSessionState | null;
@@ -180,7 +181,7 @@ function SessionLoading() {
         backgroundColor: "#050A19",
       }}
     >
-      <ActivityIndicator color="#5EEAD4" />
+      <ActivityIndicator color="#69E0FA" />
       <Text style={{ color: "#A8B3C7", marginTop: 12 }}>
         Loading your safe space…
       </Text>
@@ -202,9 +203,9 @@ export function SessionErrorScreen() {
     >
       <Text
         style={{
+          fontFamily: fonts.w800,
           color: "#F8FAFC",
           fontSize: 22,
-          fontWeight: "800",
           textAlign: "center",
         }}
       >
@@ -212,6 +213,7 @@ export function SessionErrorScreen() {
       </Text>
       <Text
         style={{
+          fontFamily: fonts.w400,
           color: "#A8B3C7",
           fontSize: 15,
           lineHeight: 22,

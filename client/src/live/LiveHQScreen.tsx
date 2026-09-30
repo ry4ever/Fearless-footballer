@@ -191,9 +191,11 @@ export function LiveHQScreen({ onStartSession, onOpenTab }: LiveHQScreenProps) {
               onClick={() => onStartSession(nextSession(view, progress).session)}
               aria-label={`${view.programme.title}, ${view.completed} of ${view.sessions.length} sessions done. Play the next session`}
             >
-              <img src={programmePhoto(view.programme.slug)} alt="" />
-              <span className="hq2-programme-text">
+              <span className="hq2-programme-photo">
+                <img src={programmePhoto(view.programme.slug)} alt="" />
                 <strong>{view.programme.title}</strong>
+              </span>
+              <span className="hq2-programme-text">
                 <small>{view.sessions.map((session) => session.title).join(" · ")}</small>
                 <span className="hq2-bar" aria-hidden="true">
                   <span style={{ width: `${(view.completed / view.sessions.length) * 100}%` }} />

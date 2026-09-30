@@ -14,7 +14,7 @@ import {
   UserRound,
   X,
 } from "lucide-react";
-import { sessionPhoto, sessionTagLine, splitTitle, TRAINING_STYLES, videoLengthLabel } from "@shared/player";
+import { sessionPhoto, sessionTags, splitTitle, TRAINING_STYLES, videoLengthLabel } from "@shared/player";
 import type {
   CompletionSyncResponse,
   PlaybackEventRequest,
@@ -71,8 +71,8 @@ function pickVariant(session: SessionPackage, mode: SessionMode, withMusic: bool
 }
 
 /**
- * The training session: session image and title, Mark's video introduction,
- * what they're working on, then two choices – training style and backing
+ * The training session: session image, title and tags, Mark's video
+ * introduction, then two choices – training style and backing
  * music – which pick one of the recordings. Reflect unlocks once the session
  * is done: introduce → choose → train → reflect.
  */
@@ -344,7 +344,7 @@ function PlayerCore({ session, variant, modes, onChooseMode, hasMusicChoice, onC
   }
 
   const [titleTop, titleBottom] = splitTitle(session.title);
-  const tagLine = sessionTagLine(session);
+  const tags = sessionTags(session);
   const videoLength = videoLengthLabel(session.whyVideoDurationSeconds);
   // Older single-file sessions mix in a music bed the player can switch itself.
   const canChooseMusic = variant ? hasMusicChoice : true;
@@ -372,7 +372,14 @@ function PlayerCore({ session, variant, modes, onChooseMode, hasMusicChoice, onC
               </>
             )}
           </h1>
-          {tagLine && <p className="ps-tags">{tagLine}</p>}
+          {tags.length > 0 && (
+            // Each tag stays on one line; the row wraps between tags.
+            <ul className="ps-tags" aria-label="Session focus">
+              {tags.map((tag) => (
+                <li key={tag}>{tag}</li>
+              ))}
+            </ul>
+          )}
         </div>
       </section>
 
@@ -402,12 +409,6 @@ function PlayerCore({ session, variant, modes, onChooseMode, hasMusicChoice, onC
           </button>
         )}
 
-        {session.workingOn && session.workingOn.length > 0 && (
-          <section className="ps-working" aria-label="Today you're working on">
-            <span className="ps-eyebrow">TODAY YOU'RE WORKING ON</span>
-            <p>{session.workingOn.join(" · ")}</p>
-          </section>
-        )}
 
         {modes.length > 0 && (
           <section aria-label="Choose your training style">

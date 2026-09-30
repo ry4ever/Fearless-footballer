@@ -118,10 +118,8 @@ model Session {
   videoUrl            String?
   /// Length of that video, for the "2 MIN" label.
   videoDurationSeconds Int?
-  /// Short labels under the title, e.g. ["Confidence", "Match Preparation"].
+  /// Short labels under the title, e.g. ["Confidence", "Self-Belief", "Match Preparation"].
   tags                String[]           @default([])
-  /// "Today you're working on" points, a few words each.
-  workingOn           String[]           @default([])
   sessionCompletions  SessionCompleted[]
   phases              SessionPhase[]
   prompts             SessionPrompt[]

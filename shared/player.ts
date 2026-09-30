@@ -41,10 +41,9 @@ export function splitTitle(title: string): [string, string] {
   return [words.slice(0, cut).join(" "), words.slice(cut).join(" ")];
 }
 
-/** "CONFIDENCE · MATCH PREPARATION", falling back to the focus area. */
-export function sessionTagLine(session: Pick<SessionPackage, "tags" | "focusArea">): string {
-  const tags = session.tags?.length ? session.tags : session.focusArea ? [session.focusArea] : [];
-  return tags.join(" · ");
+/** Labels under the title (e.g. Confidence · Self-Belief), falling back to the focus area. */
+export function sessionTags(session: Pick<SessionPackage, "tags" | "focusArea">): string[] {
+  return session.tags?.length ? session.tags : session.focusArea ? [session.focusArea] : [];
 }
 
 /** "2 MIN" for a video's length (at least 1). */

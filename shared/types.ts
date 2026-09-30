@@ -107,8 +107,6 @@ export interface SessionPackage {
   whyVideoDurationSeconds?: number;
   /** Short labels under the title, e.g. ["Confidence", "Match Preparation"]. */
   tags?: string[];
-  /** "Today you're working on" points. */
-  workingOn?: string[];
   phases: SessionPhase[];
   prompts: SessionPrompt[];
 }

@@ -12,13 +12,14 @@ import {
 } from "react-native";
 import { StatusBar } from "expo-status-bar";
 import type { ReactNode } from "react";
+import { fonts } from "./fonts";
 
 export const colors = {
   background: "#050A19",
   card: "#0D1730",
   cardStrong: "#0B1635",
-  cyan: "#5EEAD4",
-  cyanStrong: "#00D8CC",
+  cyan: "#69E0FA",
+  cyanStrong: "#008BCE",
   magenta: "#C13BFF",
   muted: "#A8B3C7",
   line: "#243455",
@@ -359,21 +360,22 @@ const styles = StyleSheet.create({
   brandCompact: { marginBottom: 18 },
   titleBlock: { marginBottom: 22 },
   eyebrow: {
+    fontFamily: fonts.w800,
     color: colors.cyan,
     fontSize: 11,
-    fontWeight: "800",
     letterSpacing: 1.4,
     marginBottom: 8,
     textTransform: "uppercase",
   },
   title: {
+    fontFamily: fonts.w800,
     color: colors.white,
     fontSize: 27,
-    fontWeight: "800",
     letterSpacing: -0.5,
     lineHeight: 34,
   },
   copy: {
+    fontFamily: fonts.w400,
     color: colors.muted,
     fontSize: 15,
     lineHeight: 23,
@@ -398,17 +400,18 @@ const styles = StyleSheet.create({
   buttonQuiet: { backgroundColor: "transparent" },
   buttonDisabled: { opacity: 0.45 },
   buttonPressed: { opacity: 0.82 },
-  buttonText: { color: "#050A19", fontSize: 15, fontWeight: "800" },
+  buttonText: { fontFamily: fonts.w800, color: "#050A19", fontSize: 15 },
   buttonTextLight: { color: "#16070d" },
   buttonTextMuted: { color: colors.cyan },
   field: { marginBottom: 16 },
   fieldLabel: {
+    fontFamily: fonts.w700,
     color: colors.white,
     fontSize: 14,
-    fontWeight: "700",
     marginBottom: 8,
   },
   input: {
+    fontFamily: fonts.w400,
     minHeight: 48,
     borderWidth: 1,
     borderColor: colors.line,
@@ -421,8 +424,8 @@ const styles = StyleSheet.create({
   },
   inputMultiline: { minHeight: 96, textAlignVertical: "top" },
   inputError: { borderColor: colors.danger },
-  errorText: { color: colors.danger, fontSize: 13, marginTop: 6 },
-  hintText: { color: colors.muted, fontSize: 13, marginTop: 6 },
+  errorText: { fontFamily: fonts.w400, color: colors.danger, fontSize: 13, marginTop: 6 },
+  hintText: { fontFamily: fonts.w400, color: colors.muted, fontSize: 13, marginTop: 6 },
   choiceCard: {
     minHeight: 72,
     borderWidth: 1,
@@ -438,9 +441,9 @@ const styles = StyleSheet.create({
     borderWidth: 0,
   },
   choiceSelectedLabel: {
+    fontFamily: fonts.w800,
     color: colors.cyan,
     fontSize: 11,
-    fontWeight: "800",
     marginTop: 4,
   },
   choicePressed: { opacity: 0.8 },
@@ -453,12 +456,13 @@ const styles = StyleSheet.create({
     marginBottom: 14,
   },
   choiceTitle: {
+    fontFamily: fonts.w800,
     color: colors.white,
     fontSize: 18,
-    fontWeight: "800",
     marginBottom: 6,
   },
   choiceDescription: {
+    fontFamily: fonts.w400,
     color: colors.muted,
     fontSize: 14,
     lineHeight: 21,
@@ -475,12 +479,13 @@ const styles = StyleSheet.create({
   statusWarning: { borderColor: colors.magenta },
   statusDanger: { borderColor: colors.danger },
   statusTitle: {
+    fontFamily: fonts.w800,
     color: colors.white,
     fontSize: 16,
-    fontWeight: "800",
     marginBottom: 6,
   },
   statusCopy: {
+    fontFamily: fonts.w400,
     color: colors.muted,
     fontSize: 14,
     lineHeight: 21,
@@ -495,20 +500,20 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   codeLabel: {
+    fontFamily: fonts.w800,
     color: colors.cyan,
     fontSize: 11,
-    fontWeight: "800",
     letterSpacing: 0.8,
     textAlign: "center",
   },
   codeValue: {
+    fontFamily: fonts.w900,
     color: colors.white,
     fontSize: 34,
-    fontWeight: "900",
     letterSpacing: 3,
     marginVertical: 12,
   },
-  codeExpiry: { color: colors.muted, fontSize: 13 },
+  codeExpiry: { fontFamily: fonts.w400, color: colors.muted, fontSize: 13 },
   privacyNotice: {
     borderWidth: 1,
     borderColor: colors.line,
@@ -521,13 +526,14 @@ const styles = StyleSheet.create({
   },
   privacyCompact: { padding: 12, marginTop: 12 },
   privacyLabel: {
+    fontFamily: fonts.w800,
     color: colors.cyan,
     fontSize: 11,
-    fontWeight: "800",
     letterSpacing: 1.2,
     marginBottom: 6,
   },
   privacyText: {
+    fontFamily: fonts.w400,
     color: colors.muted,
     fontSize: 13,
     lineHeight: 20,
@@ -544,6 +550,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.cyan,
   },
   progressLabel: {
+    fontFamily: fonts.w400,
     color: colors.muted,
     fontSize: 12,
     marginTop: 6,

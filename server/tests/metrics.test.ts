@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { BASELINE_SCORE, computeAthleteMetrics, localDayKey } from "../lib/metrics";
+import { BASELINE_SCORE, computeAthleteMetrics, consecutiveTrainingWeeks, localDayKey } from "../lib/metrics";
 
 const at = (iso: string, hasReflection = false) => ({ completedAt: new Date(iso), hasReflection });
 
@@ -76,5 +76,26 @@ describe("computeAthleteMetrics", () => {
   it("ignores completions stamped in the future", () => {
     const metrics = computeAthleteMetrics([at("2026-10-05T10:00:00Z")], "UTC", new Date("2026-09-27T12:00:00Z"));
     expect(metrics.activeDaysLast7).toBe(0);
+  });
+});
+
+describe("consecutiveTrainingWeeks", () => {
+  // Tuesday 29 September 2026.
+  const now = new Date("2026-09-29T12:00:00Z");
+
+  it("counts weeks in a row ending this week", () => {
+    const history = ["2026-09-28", "2026-09-22", "2026-09-17", "2026-09-10"].map(day => new Date(`${day}T10:00:00Z`));
+    expect(consecutiveTrainingWeeks(history, "UTC", now)).toBe(4);
+  });
+
+  it("still counts last week's run while this week has no session yet", () => {
+    const history = ["2026-09-26", "2026-09-15"].map(day => new Date(`${day}T10:00:00Z`));
+    expect(consecutiveTrainingWeeks(history, "UTC", now)).toBe(2);
+  });
+
+  it("stops at a week with no sessions", () => {
+    const history = ["2026-09-28", "2026-09-10"].map(day => new Date(`${day}T10:00:00Z`));
+    expect(consecutiveTrainingWeeks(history, "UTC", now)).toBe(1);
+    expect(consecutiveTrainingWeeks([], "UTC", now)).toBe(0);
   });
 });

@@ -15,6 +15,7 @@ import {
   StatusCard,
   colors,
 } from "../../src/ui";
+import { fonts } from "../../src/ui/fonts";
 
 export function PairingClaimContent() {
   const router = useRouter();
@@ -183,6 +184,7 @@ const styles = {
   },
   consentChecked: { borderColor: colors.cyan },
   consentCopy: {
+    fontFamily: fonts.w400,
     color: colors.muted,
     fontSize: 14,
     lineHeight: 20,

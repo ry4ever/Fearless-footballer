@@ -1,6 +1,7 @@
 import { Pressable, Text, View } from "react-native";
 import type { SessionPackage } from "../../../shared/types";
 import { colors } from "./index";
+import { fonts } from "./fonts";
 
 /**
  * One session in a list: number (in programmes), title and category. Playable
@@ -79,18 +80,18 @@ const styles = {
     borderRadius: 14,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "rgba(94, 234, 212, 0.14)",
+    backgroundColor: "rgba(105, 224, 250, 0.14)",
   },
-  indexText: { color: colors.cyan, fontSize: 12, fontWeight: "900" },
+  indexText: { fontFamily: fonts.w900, color: colors.cyan, fontSize: 12 },
   indexDone: { backgroundColor: colors.cyan },
   indexTextDone: { color: "#041126" },
   rowText: { flex: 1 },
-  title: { color: colors.white, fontSize: 15, fontWeight: "800" },
-  meta: { color: colors.muted, fontSize: 12, marginTop: 2 },
+  title: { fontFamily: fonts.w800, color: colors.white, fontSize: 15 },
+  meta: { fontFamily: fonts.w400, color: colors.muted, fontSize: 12, marginTop: 2 },
   badge: {
+    fontFamily: fonts.w900,
     color: colors.muted,
     fontSize: 10,
-    fontWeight: "900",
     letterSpacing: 1,
     paddingHorizontal: 8,
     paddingVertical: 3,
@@ -98,5 +99,5 @@ const styles = {
     backgroundColor: "rgba(255,255,255,0.08)",
     overflow: "hidden",
   },
-  chevron: { color: colors.cyan, fontSize: 24, fontWeight: "700" },
+  chevron: { fontFamily: fonts.w700, color: colors.cyan, fontSize: 24 },
 } as const;

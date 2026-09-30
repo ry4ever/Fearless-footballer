@@ -91,7 +91,7 @@ export function ParentDashboard({ onBack }: ParentDashboardProps) {
         <section className="athlete-identity" aria-label="Linked Athlete">
           <div className="athlete-avatar">AR</div>
           <div>
-            <span className="eyebrow" style={{ color: "#00F0FF", letterSpacing: "0.08em" }}>ALEX'S OFF-PITCH TRAINING</span>
+            <span className="eyebrow" style={{ color: "#69E0FA", letterSpacing: "0.08em" }}>ALEX'S OFF-PITCH TRAINING</span>
             <h1>Alex Rivera</h1>
             <p>Striker · Current focus: Become More Dangerous in the Box</p>
           </div>
@@ -107,7 +107,7 @@ export function ParentDashboard({ onBack }: ParentDashboardProps) {
               <span className="eyebrow">THIS WEEK</span>
               <h2>4 of 5 Sessions Completed</h2>
             </div>
-            <CalendarDays size={22} color="#00F0FF" />
+            <CalendarDays size={22} color="#69E0FA" />
           </div>
 
           <div className="completion-row">
@@ -185,22 +185,22 @@ export function ParentDashboard({ onBack }: ParentDashboardProps) {
         <section className="trained-sessions-section" style={{ marginTop: 20 }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
             <div>
-              <span className="eyebrow" style={{ color: "#00F0FF", letterSpacing: "0.08em" }}>SITUATIONS REHEARSED</span>
+              <span className="eyebrow" style={{ color: "#69E0FA", letterSpacing: "0.08em" }}>SITUATIONS REHEARSED</span>
               <h2 style={{ fontSize: 16, margin: "3px 0 0", color: "#fff", fontWeight: 700 }}>Sessions Trained This Week</h2>
             </div>
             <span style={{ fontSize: 11, color: "#8fa3c7", background: "rgba(255,255,255,0.06)", padding: "4px 8px", borderRadius: 8 }}>4 total</span>
           </div>
 
           <div style={{ display: "flex", flexDirection: "column", gap: 9 }}>
-            <div style={{ background: "rgba(15, 34, 73, 0.7)", border: "1px solid rgba(0, 240, 255, 0.2)", borderRadius: 12, padding: "12px 14px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+            <div style={{ background: "rgba(15, 34, 73, 0.7)", border: "1px solid rgba(105, 224, 250, 0.2)", borderRadius: 12, padding: "12px 14px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
               <div>
                 <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 3 }}>
-                  <span style={{ fontSize: 9, fontWeight: 700, textTransform: "uppercase", background: "rgba(0, 240, 255, 0.15)", color: "#00F0FF", padding: "2px 6px", borderRadius: 4 }}>Tactical · Movement</span>
+                  <span style={{ fontSize: 9, fontWeight: 700, textTransform: "uppercase", background: "rgba(105, 224, 250, 0.15)", color: "#69E0FA", padding: "2px 6px", borderRadius: 4 }}>Tactical · Movement</span>
                   <span style={{ fontSize: 11, color: "#7a90b8" }}>Today & Yesterday</span>
                 </div>
                 <strong style={{ fontSize: 13, color: "#f0f4fc" }}>Finding Space Between Centre-Backs</strong>
               </div>
-              <span style={{ fontSize: 12, fontWeight: 800, color: "#00F0FF", background: "rgba(0, 240, 255, 0.1)", padding: "4px 8px", borderRadius: 6 }}>2x</span>
+              <span style={{ fontSize: 12, fontWeight: 800, color: "#69E0FA", background: "rgba(105, 224, 250, 0.1)", padding: "4px 8px", borderRadius: 6 }}>2x</span>
             </div>
 
             <div style={{ background: "rgba(15, 34, 73, 0.7)", border: "1px solid rgba(193, 59, 255, 0.2)", borderRadius: 12, padding: "12px 14px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
@@ -232,8 +232,8 @@ export function ParentDashboard({ onBack }: ParentDashboardProps) {
           <span className="eyebrow" style={{ color: "#8fa3c7" }}>TRAINING PILLARS</span>
           <h3 style={{ fontSize: 13, color: "#fff", margin: "4px 0 10px", fontWeight: 700 }}>Areas Trained This Week</h3>
           <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 8, textAlign: "center" }}>
-            <div style={{ background: "rgba(0, 240, 255, 0.08)", border: "1px solid rgba(0, 240, 255, 0.25)", borderRadius: 10, padding: "8px 6px" }}>
-              <div style={{ fontSize: 14, color: "#00F0FF", fontWeight: 800 }}>✓</div>
+            <div style={{ background: "rgba(105, 224, 250, 0.08)", border: "1px solid rgba(105, 224, 250, 0.25)", borderRadius: 10, padding: "8px 6px" }}>
+              <div style={{ fontSize: 14, color: "#69E0FA", fontWeight: 800 }}>✓</div>
               <strong style={{ display: "block", fontSize: 11, color: "#fff", marginTop: 2 }}>Technical</strong>
               <span style={{ fontSize: 9, color: "#8fa3c7" }}>Finishing & 1v1</span>
             </div>

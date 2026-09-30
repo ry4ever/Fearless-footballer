@@ -180,7 +180,7 @@ export function PlayerScreen({
           className="icon-button"
           onClick={() => setSessionIndex((prev) => (prev + 1) % sessions.length)}
           title="Switch Rehearsal Session"
-          style={{ background: "rgba(255,255,255,0.08)", border: "none", color: "#00F0FF", padding: "6px 12px", borderRadius: "100px", fontSize: "0.75rem", fontWeight: 700 }}
+          style={{ background: "rgba(255,255,255,0.08)", border: "none", color: "#69E0FA", padding: "6px 12px", borderRadius: "100px", fontSize: "0.75rem", fontWeight: 700 }}
         >
           Switch
         </button>
@@ -224,12 +224,12 @@ export function PlayerScreen({
                     padding: "8px 6px",
                     borderRadius: "8px",
                     textAlign: "center",
-                    background: isActive ? "rgba(0, 240, 255, 0.15)" : isPast ? "rgba(255,255,255,0.06)" : "rgba(255,255,255,0.02)",
-                    border: isActive ? "1.5px solid #00F0FF" : "1px solid rgba(255,255,255,0.08)",
+                    background: isActive ? "rgba(105, 224, 250, 0.15)" : isPast ? "rgba(255,255,255,0.06)" : "rgba(255,255,255,0.02)",
+                    border: isActive ? "1.5px solid #69E0FA" : "1px solid rgba(255,255,255,0.08)",
                     transition: "all 0.3s ease",
                   }}
                 >
-                  <span style={{ display: "block", fontSize: "0.75rem", fontWeight: 800, color: isActive ? "#00F0FF" : isPast ? "#fff" : "rgba(255,255,255,0.4)", letterSpacing: "1px" }}>
+                  <span style={{ display: "block", fontSize: "0.75rem", fontWeight: 800, color: isActive ? "#69E0FA" : isPast ? "#fff" : "rgba(255,255,255,0.4)", letterSpacing: "1px" }}>
                     {phase.label}
                   </span>
                   <span style={{ display: "block", fontSize: "0.6rem", color: isActive ? "rgba(255,255,255,0.85)" : "rgba(255,255,255,0.4)", marginTop: "2px", lineHeight: "1.1" }}>
@@ -336,9 +336,9 @@ export function PlayerScreen({
                 type="button"
                 onClick={() => setSelectedFormat(fmt)}
                 style={{
-                  background: isSelected ? "rgba(0,240,255,0.15)" : "rgba(255,255,255,0.04)",
-                  border: isSelected ? "1px solid #00F0FF" : "1px solid rgba(255,255,255,0.08)",
-                  color: isSelected ? "#00F0FF" : "rgba(255,255,255,0.6)",
+                  background: isSelected ? "rgba(105,224,250,0.15)" : "rgba(255,255,255,0.04)",
+                  border: isSelected ? "1px solid #69E0FA" : "1px solid rgba(255,255,255,0.08)",
+                  color: isSelected ? "#69E0FA" : "rgba(255,255,255,0.6)",
                   padding: "4px 10px",
                   borderRadius: "100px",
                   fontSize: "0.7rem",
@@ -391,15 +391,15 @@ export function PlayerScreen({
             <div
               style={{
                 background: "#0c1322",
-                border: "1.5px solid rgba(0,240,255,0.3)",
+                border: "1.5px solid rgba(105,224,250,0.3)",
                 borderRadius: "20px",
                 padding: "24px",
                 maxWidth: "360px",
                 width: "100%",
-                boxShadow: "0 20px 50px rgba(0,240,255,0.2)",
+                boxShadow: "0 20px 50px rgba(105,224,250,0.2)",
               }}
             >
-              <div style={{ display: "inline-block", background: "rgba(0,240,255,0.15)", color: "#00F0FF", padding: "4px 10px", borderRadius: "100px", fontSize: "0.7rem", fontWeight: 700 }}>
+              <div style={{ display: "inline-block", background: "rgba(105,224,250,0.15)", color: "#69E0FA", padding: "4px 10px", borderRadius: "100px", fontSize: "0.7rem", fontWeight: 700 }}>
                 OFF-PITCH REFLECTION
               </div>
 
@@ -428,8 +428,8 @@ export function PlayerScreen({
                         alignItems: "center",
                         padding: "12px 14px",
                         borderRadius: "12px",
-                        background: isSelected ? "rgba(0,240,255,0.12)" : "rgba(255,255,255,0.04)",
-                        border: isSelected ? "1.5px solid #00F0FF" : "1px solid rgba(255,255,255,0.08)",
+                        background: isSelected ? "rgba(105,224,250,0.12)" : "rgba(255,255,255,0.04)",
+                        border: isSelected ? "1.5px solid #69E0FA" : "1px solid rgba(255,255,255,0.08)",
                         color: "#fff",
                         textAlign: "left",
                         cursor: "pointer",
@@ -439,7 +439,7 @@ export function PlayerScreen({
                         <strong style={{ fontSize: "0.9rem", display: "block" }}>{item.label}</strong>
                         <span style={{ fontSize: "0.75rem", color: "rgba(255,255,255,0.5)" }}>{item.desc}</span>
                       </div>
-                      {isSelected && <Check size={16} color="#00F0FF" />}
+                      {isSelected && <Check size={16} color="#69E0FA" />}
                     </button>
                   );
                 })}

@@ -73,18 +73,20 @@ export function LiveTrainingScreen({ onStartSession }: LiveTrainingScreenProps) 
 
       {views.map((view) => (
         <section key={view.programme.slug} className="hq2-card hq2-programme-card" aria-label={view.programme.title}>
-          <div className="hq2-programme-head">
+          <div className="hq2-programme-hero">
             <img src={programmePhoto(view.programme.slug)} alt="" />
             <div>
               <span className="hq2-eyebrow">PROGRAMME</span>
               <h2>{view.programme.title}</h2>
-              <span className="hq2-bar" aria-hidden="true">
-                <span style={{ width: `${(view.completed / view.sessions.length) * 100}%` }} />
-              </span>
-              <small className="hq2-meta">
-                {view.completed} of {view.sessions.length} sessions
-              </small>
             </div>
+          </div>
+          <div>
+            <span className="hq2-bar" aria-hidden="true">
+              <span style={{ width: `${(view.completed / view.sessions.length) * 100}%` }} />
+            </span>
+            <small className="hq2-meta">
+              {view.completed} of {view.sessions.length} sessions
+            </small>
           </div>
           <p className="live-copy">{view.programme.description}</p>
           <div className="hq2-rows">

@@ -1,6 +1,7 @@
 import { Modal, Pressable, Text, View } from "react-native";
 import { useVideoPlayer, VideoView } from "expo-video";
 import { colors } from "./index";
+import { fonts } from "./fonts";
 
 /** "Why this works?" link shown under the player's completion note. */
 export function WhyVideoLink({ onPress }: { onPress: () => void }) {
@@ -45,7 +46,7 @@ export function WhyVideoModal({ url, onClose }: { url: string; onClose: () => vo
 
 const styles = {
   link: { alignSelf: "center", minHeight: 44, justifyContent: "center", paddingHorizontal: 12, marginBottom: 12 },
-  linkText: { color: colors.cyan, fontSize: 15, fontWeight: "800", textDecorationLine: "underline" },
+  linkText: { fontFamily: fonts.w800, color: colors.cyan, fontSize: 15, textDecorationLine: "underline" },
   pressed: { opacity: 0.75 },
   backdrop: { flex: 1, backgroundColor: "#000", justifyContent: "center" },
   video: { width: "100%", height: "100%" },
@@ -60,5 +61,5 @@ const styles = {
     justifyContent: "center",
     backgroundColor: "rgba(0,0,0,0.55)",
   },
-  closeText: { color: colors.white, fontSize: 20, fontWeight: "900" },
+  closeText: { fontFamily: fonts.w900, color: colors.white, fontSize: 20 },
 } as const;

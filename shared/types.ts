@@ -290,6 +290,12 @@ export interface AthleteProgress extends ComposureMetrics {
   completedSessionIds?: string[];
   /** Sessions completed today, in the athlete's timezone. */
   completedTodaySessionIds?: string[];
+  /** Every completed session, counting repeats. */
+  totalCompletions?: number;
+  /** Weeks in a row (Mon–Sun) with at least one session, ending this or last week. */
+  consecutiveWeeks?: number;
+  /** Completed sessions per focus area, most first. */
+  completionsByArea?: { area: string; count: number }[];
   moodTrend: {
     status: string;
     subtitle: string;

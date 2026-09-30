@@ -21,7 +21,7 @@ import {
 import { sanitizeAuditDetails } from "./lib/audit";
 import { monitoring } from "./lib/monitoring";
 import { generateSignedMediaUrl } from "./lib/cdn";
-import { computeAthleteMetrics, localDayKey, type CompletionRecord } from "./lib/metrics";
+import { computeAthleteMetrics, consecutiveTrainingWeeks, localDayKey, type CompletionRecord } from "./lib/metrics";
 import {
   type AgeGateResponse,
   type AgeGateStatus,
@@ -1624,7 +1624,7 @@ async function getAthleteProgressHandler(req: Request, res: Response) {
 
   const completions = await prisma.sessionCompleted.findMany({
     where: { userId: metrics.athlete.userId },
-    select: { sessionId: true, completedAt: true },
+    select: { sessionId: true, completedAt: true, session: { select: { focusArea: true } } },
   });
   const todayKey = localDayKey(now, metrics.timezone);
   const completedSessionIds = Array.from(new Set(completions.map((completion) => completion.sessionId)));
@@ -1634,6 +1634,16 @@ async function getAthleteProgressHandler(req: Request, res: Response) {
         .filter((completion) => localDayKey(completion.completedAt, metrics.timezone) === todayKey)
         .map((completion) => completion.sessionId),
     ),
+  );
+
+  // Sessions completed per focus area, most-trained first.
+  const areaCounts = new Map<string, number>();
+  for (const completion of completions) {
+    const area = completion.session.focusArea ?? "Other sessions";
+    areaCounts.set(area, (areaCounts.get(area) ?? 0) + 1);
+  }
+  const completionsByArea = Array.from(areaCounts, ([area, count]) => ({ area, count })).sort(
+    (a, b) => b.count - a.count || a.area.localeCompare(b.area),
   );
 
   const progress: AthleteProgress = {
@@ -1649,6 +1659,13 @@ async function getAthleteProgressHandler(req: Request, res: Response) {
     lastRep,
     completedSessionIds,
     completedTodaySessionIds,
+    totalCompletions: completions.length,
+    consecutiveWeeks: consecutiveTrainingWeeks(
+      completions.map((completion) => completion.completedAt),
+      metrics.timezone,
+      now,
+    ),
+    completionsByArea,
     moodTrend: {
       status: "Steady",
       subtitle: "A private post-rep check-in was completed.",

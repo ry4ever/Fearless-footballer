@@ -51,6 +51,7 @@ import {
   measurePlaybackSeconds,
   type PlaybackInterval,
 } from "../../src/lib/sessionPlayer";
+import { fonts } from "../../src/ui/fonts";
 
 const COMPLETION_THRESHOLD = 0.8;
 
@@ -610,7 +611,7 @@ export default function SessionScreen() {
 const styles = {
   backButton: { marginBottom: 18, paddingHorizontal: 4 },
   backButtonPressed: { opacity: 0.8 },
-  backButtonText: { color: colors.cyan, fontSize: 15, fontWeight: "800" },
+  backButtonText: { fontFamily: fonts.w800, color: colors.cyan, fontSize: 15 },
   statusGrid: { gap: 12, marginBottom: 16 },
   playerCard: {
     backgroundColor: colors.card,
@@ -627,13 +628,13 @@ const styles = {
     alignItems: "center",
   },
   phaseLabel: {
+    fontFamily: fonts.w900,
     color: colors.magenta,
     fontSize: 11,
-    fontWeight: "900",
     letterSpacing: 1,
     flex: 1,
   },
-  clock: { color: colors.white, fontSize: 18, fontWeight: "900" },
+  clock: { fontFamily: fonts.w900, color: colors.white, fontSize: 18 },
   promptCard: {
     backgroundColor: "#08122A",
     borderColor: colors.line,
@@ -642,14 +643,14 @@ const styles = {
     padding: 16,
   },
   promptLabel: {
+    fontFamily: fonts.w900,
     color: colors.cyan,
     fontSize: 11,
-    fontWeight: "900",
     letterSpacing: 1,
     marginBottom: 8,
   },
-  promptText: { color: colors.white, fontSize: 18, fontWeight: "800", lineHeight: 25 },
-  promptSubtext: { color: colors.muted, fontSize: 14, lineHeight: 21, marginTop: 8 },
+  promptText: { fontFamily: fonts.w800, color: colors.white, fontSize: 18, lineHeight: 25 },
+  promptSubtext: { fontFamily: fonts.w400, color: colors.muted, fontSize: 14, lineHeight: 21, marginTop: 8 },
   controls: { flexDirection: "row", justifyContent: "center", gap: 16 },
   roundControl: {
     width: 68,
@@ -663,20 +664,20 @@ const styles = {
   },
   roundControlSecondary: { width: 58, height: 58, borderRadius: 29 },
   playControl: { backgroundColor: colors.cyanStrong, borderColor: colors.cyanStrong },
-  controlText: { color: colors.white, fontSize: 16, fontWeight: "900" },
-  playControlText: { color: "#050A19", fontSize: 25, fontWeight: "900" },
+  controlText: { fontFamily: fonts.w900, color: colors.white, fontSize: 16 },
+  playControlText: { fontFamily: fonts.w900, color: "#050A19", fontSize: 25 },
   pressed: { opacity: 0.78 },
   playbackMeter: { alignItems: "center" },
   playbackMeterLabel: {
+    fontFamily: fonts.w900,
     color: colors.cyan,
     fontSize: 11,
-    fontWeight: "900",
     letterSpacing: 1,
     marginBottom: 5,
   },
-  playbackMeterValue: { color: colors.white, fontSize: 15, fontWeight: "800" },
+  playbackMeterValue: { fontFamily: fonts.w800, color: colors.white, fontSize: 15 },
   versionBar: { gap: 10, marginBottom: 16 },
-  versionLabel: { color: colors.cyan, fontSize: 11, fontWeight: "900", letterSpacing: 1 },
+  versionLabel: { fontFamily: fonts.w900, color: colors.cyan, fontSize: 11, letterSpacing: 1 },
   versionRow: {
     flexDirection: "row",
     gap: 4,
@@ -693,7 +694,7 @@ const styles = {
     paddingHorizontal: 4,
   },
   versionOptionSelected: { backgroundColor: colors.cyanStrong },
-  versionOptionText: { color: colors.muted, fontSize: 13, fontWeight: "800" },
+  versionOptionText: { fontFamily: fonts.w800, color: colors.muted, fontSize: 13 },
   versionOptionTextSelected: { color: "#050A19" },
   musicToggle: { flexDirection: "row", alignItems: "center", gap: 8, alignSelf: "flex-start", minHeight: 44 },
   musicBox: {
@@ -706,7 +707,7 @@ const styles = {
     justifyContent: "center",
   },
   musicBoxOn: { backgroundColor: colors.cyanStrong, borderColor: colors.cyanStrong },
-  musicTick: { color: "#050A19", fontSize: 13, fontWeight: "900" },
-  musicText: { color: colors.white, fontSize: 14, fontWeight: "700" },
-  versionDetail: { color: colors.muted, fontSize: 14, lineHeight: 20 },
+  musicTick: { fontFamily: fonts.w900, color: "#050A19", fontSize: 13 },
+  musicText: { fontFamily: fonts.w700, color: colors.white, fontSize: 14 },
+  versionDetail: { fontFamily: fonts.w400, color: colors.muted, fontSize: 14, lineHeight: 20 },
 } as const;

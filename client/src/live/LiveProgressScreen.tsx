@@ -1,7 +1,13 @@
-import { Flame, Trophy } from "lucide-react";
+import { photo } from "../lib/onboardingOptions";
 import { LoadState, PendingNote } from "./LiveHQScreen";
 import { lastSevenDayLabels, programmeViews, useAthleteData } from "./useAthleteData";
 
+const plural = (count: number, one: string, many: string) => (count === 1 ? one : many);
+
+/**
+ * Progress as football development: training completed and areas worked on
+ * come first. Streaks stay, but further down – they're a habit, not the goal.
+ */
 export function LiveProgressScreen() {
   const { progress, library, error, pending, reload } = useAthleteData();
   if (!progress || !library) {
@@ -10,7 +16,10 @@ export function LiveProgressScreen() {
 
   const views = programmeViews(library, progress);
   const dayLabels = lastSevenDayLabels();
-  const sessionsDone = progress.completedSessionIds?.length ?? 0;
+  const total = progress.totalCompletions ?? 0;
+  const weeks = progress.consecutiveWeeks ?? 0;
+  const areas = progress.completionsByArea ?? [];
+  const topArea = areas[0]?.count ?? 1;
 
   return (
     <div className="screen hq2-screen">
@@ -24,25 +33,76 @@ export function LiveProgressScreen() {
 
       <PendingNote pending={pending} />
 
-      <div className="hq2-stats">
-        <section className="hq2-card hq2-stat" aria-label="Current streak">
-          <Flame size={20} className="hq2-stat-icon" />
-          <strong>{progress.currentStreakDays}</strong>
-          <span className="hq2-eyebrow">DAY STREAK</span>
-        </section>
-        <section className="hq2-card hq2-stat" aria-label="Best streak">
-          <Trophy size={20} className="hq2-stat-icon" />
-          <strong>{progress.bestStreakDays}</strong>
-          <span className="hq2-eyebrow">BEST STREAK</span>
-        </section>
-      </div>
+      <section className="hq2-card pr-hero" aria-label="Off-Pitch Training completed">
+        <img src={photo("stadium")} alt="" />
+        <div className="pr-hero-body">
+          <strong className="pr-big">{total}</strong>
+          <span className="pr-hero-label">Off-Pitch Training {plural(total, "session", "sessions")} completed</span>
+          {total === 0 && <p className="pr-note">Your first session starts your development record.</p>}
+        </div>
+      </section>
 
-      <section className="hq2-card" aria-label="Last 7 days">
-        <span className="hq2-eyebrow">LAST 7 DAYS</span>
-        <h2>
-          {progress.weeklyCompletedDays} of {progress.weeklyTargetDays} days trained
-        </h2>
-        <div className="hq2-days hq2-days-wide" aria-hidden="true">
+      <section className="hq2-card pr-weeks" aria-label="Weeks training consistently">
+        <strong className="pr-mid">{weeks}</strong>
+        <span>
+          {plural(weeks, "week", "weeks")} training consistently
+          <small>At least one session every week, Monday to Sunday.</small>
+        </span>
+      </section>
+
+      <section className="hq2-card" aria-label="Areas you've worked on">
+        <span className="hq2-eyebrow">AREAS YOU'VE WORKED ON</span>
+        {areas.length === 0 ? (
+          <p className="pr-note">Complete a session to see the parts of your game you're building.</p>
+        ) : (
+          <ul className="pr-areas">
+            {areas.map(({ area, count }) => (
+              <li key={area}>
+                <div className="hq2-row">
+                  <strong>{area}</strong>
+                  <span className="hq2-meta">
+                    {count} {plural(count, "session", "sessions")}
+                  </span>
+                </div>
+                <span className="hq2-bar" aria-hidden="true">
+                  <span style={{ width: `${(count / topArea) * 100}%` }} />
+                </span>
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
+
+      {views.length > 0 && (
+        <section className="hq2-card" aria-label="Programmes">
+          <span className="hq2-eyebrow">PROGRAMMES</span>
+          {views.map((view) => (
+            <div key={view.programme.slug} className="hq2-progress-row">
+              <div className="hq2-row">
+                <strong>{view.programme.title}</strong>
+                <small className="hq2-meta">
+                  {view.completed}/{view.sessions.length}
+                </small>
+              </div>
+              <span className="hq2-bar" aria-hidden="true">
+                <span style={{ width: `${(view.completed / view.sessions.length) * 100}%` }} />
+              </span>
+            </div>
+          ))}
+        </section>
+      )}
+
+      <section className="hq2-card pr-habit" aria-label="Training habit">
+        <span className="hq2-eyebrow">TRAINING HABIT</span>
+        <div className="pr-habit-row">
+          <span>
+            Streak <strong>{progress.currentStreakDays}</strong> {plural(progress.currentStreakDays, "day", "days")}
+          </span>
+          <span>
+            Best <strong>{progress.bestStreakDays}</strong> {plural(progress.bestStreakDays, "day", "days")}
+          </span>
+        </div>
+        <div className="hq2-days hq2-days-wide" aria-label={`${progress.weeklyCompletedDays} of the last 7 days trained`}>
           {progress.sevenDayPattern.map((done, index) => (
             <span key={index} className={done ? "done" : ""}>
               <i />
@@ -50,31 +110,6 @@ export function LiveProgressScreen() {
             </span>
           ))}
         </div>
-        {progress.lastRep.completedAt && (
-          <p className="hq2-meta hq2-last-rep">
-            Last rep: {progress.lastRep.title} · {progress.lastRep.duration}
-          </p>
-        )}
-      </section>
-
-      <section className="hq2-card" aria-label="Sessions completed">
-        <span className="hq2-eyebrow">SESSIONS COMPLETED</span>
-        <h2>
-          {sessionsDone} {sessionsDone === 1 ? "session" : "sessions"}
-        </h2>
-        {views.map((view) => (
-          <div key={view.programme.slug} className="hq2-progress-row">
-            <div className="hq2-row">
-              <strong>{view.programme.title}</strong>
-              <small className="hq2-meta">
-                {view.completed}/{view.sessions.length}
-              </small>
-            </div>
-            <span className="hq2-bar" aria-hidden="true">
-              <span style={{ width: `${(view.completed / view.sessions.length) * 100}%` }} />
-            </span>
-          </div>
-        ))}
       </section>
     </div>
   );

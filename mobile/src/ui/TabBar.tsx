@@ -1,6 +1,7 @@
 import { Pressable, Text, View } from "react-native";
 import { useRouter } from "expo-router";
 import { colors } from "./index";
+import { fonts } from "./fonts";
 
 export type AthleteTab = "home" | "training" | "progress" | "more";
 
@@ -43,14 +44,14 @@ const styles = {
   bar: {
     flexDirection: "row",
     borderTopWidth: 1,
-    borderTopColor: "rgba(94, 234, 212, 0.18)",
+    borderTopColor: "rgba(105, 224, 250, 0.18)",
     backgroundColor: "rgba(5, 10, 25, 0.97)",
     paddingTop: 8,
     paddingBottom: 10,
   },
   tab: { flex: 1, minHeight: 50, alignItems: "center", justifyContent: "center", gap: 3 },
   pressed: { opacity: 0.7 },
-  glyph: { color: "#7593BD", fontSize: 16, fontWeight: "900", letterSpacing: -1 },
-  label: { color: "#7593BD", fontSize: 11, fontWeight: "700" },
+  glyph: { fontFamily: fonts.w900, color: "#7593BD", fontSize: 16, letterSpacing: -1 },
+  label: { fontFamily: fonts.w700, color: "#7593BD", fontSize: 11 },
   selected: { color: colors.cyan },
 } as const;

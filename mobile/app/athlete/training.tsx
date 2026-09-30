@@ -10,6 +10,7 @@ import { hq } from "../../src/ui/hqStyles";
 import { photos } from "../../src/ui/photos";
 import { SessionRow } from "../../src/ui/SessionContent";
 import { TabBar } from "../../src/ui/TabBar";
+import { fonts } from "../../src/ui/fonts";
 
 function TrainingContent() {
   const router = useRouter();
@@ -49,11 +50,16 @@ function TrainingContent() {
 
       {views.map((view) => (
         <View key={view.programme.slug} style={hq.card} testID={`programme-${view.programme.slug}`}>
-          <View style={styles.head}>
-            <Image source={photos[programmePhoto(view.programme.slug)]} style={hq.thumb} resizeMode="cover" />
-            <View style={styles.headText}>
+          <View style={[hq.banner, styles.hero]}>
+            <Image source={photos[programmePhoto(view.programme.slug)]} style={hq.bannerPhoto} resizeMode="cover" />
+            <View style={hq.bannerShade} />
+            <View style={styles.heroText}>
               <Text style={hq.eyebrow}>PROGRAMME</Text>
               <Text style={styles.title}>{view.programme.title}</Text>
+            </View>
+          </View>
+          <View style={styles.head}>
+            <View style={styles.headText}>
               <View style={hq.barTrack}>
                 <View style={[hq.barFill, { width: `${(view.completed / view.sessions.length) * 100}%` }]} />
               </View>
@@ -102,13 +108,15 @@ function TrainingContent() {
 }
 
 const styles = {
-  head: { flexDirection: "row", alignItems: "center", gap: 12, marginBottom: 12 },
+  hero: { height: 180, marginTop: -16, marginHorizontal: -16, borderRadius: 0 },
+  heroText: { position: "absolute", left: 16, right: 16, bottom: 14 },
+  head: { marginTop: 10, marginBottom: 12 },
   headText: { flex: 1, minWidth: 0 },
-  title: { color: colors.white, fontSize: 18, fontWeight: "900", marginTop: 4 },
-  copy: { color: "#B8C6DE", fontSize: 14, lineHeight: 21, marginBottom: 12 },
+  title: { fontFamily: fonts.w900, color: colors.white, fontSize: 22, marginTop: 4 },
+  copy: { fontFamily: fonts.w400, color: "#B8C6DE", fontSize: 14, lineHeight: 21, marginBottom: 12 },
   section: { marginTop: 6, marginBottom: 14 },
   sectionLabel: { marginBottom: 8 },
-  groupLabel: { color: "#A4B6D4", fontSize: 13, fontWeight: "800", marginTop: 12, marginBottom: 8 },
+  groupLabel: { fontFamily: fonts.w800, color: "#A4B6D4", fontSize: 13, marginTop: 12, marginBottom: 8 },
 } as const;
 
 export default function AthleteTrainingScreen() {

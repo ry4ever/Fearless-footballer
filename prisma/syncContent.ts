@@ -71,6 +71,10 @@ export async function syncContent(prisma: PrismaClient, contentRoot: string) {
       mentorTitle: session.mentor.title,
       comingSoon: !audio,
       videoUrl: audio && manifest.videos?.[session.slug]?.uploaded ? manifest.videos[session.slug]!.key : null,
+      videoDurationSeconds:
+        audio && manifest.videos?.[session.slug]?.uploaded ? manifest.videos[session.slug]!.durationSeconds : null,
+      tags: session.tags,
+      workingOn: session.workingOn,
       // Keep the legacy single-file fields meaningful for older clients.
       defaultDuration: interactive?.durationSeconds ?? 600,
       voiceStreamUrl: interactive?.url ?? "",

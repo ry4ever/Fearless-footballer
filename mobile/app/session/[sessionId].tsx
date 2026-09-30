@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
-import { AppState, Pressable, Text, View } from "react-native";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { AppState, Image, Pressable, Switch, Text, View } from "react-native";
 import {
   Redirect,
   router,
@@ -20,17 +20,10 @@ import {
   savePlaybackProgress,
 } from "../../src/lib/sessionStore";
 import { AthleteRouteGuard } from "../../src/session";
-import { WhyVideoLink, WhyVideoModal } from "../../src/ui/WhyVideo";
-import {
-  Button,
-  PageTitle,
-  PrivacyNotice,
-  ProgressBar,
-  Screen,
-  Wordmark,
-  StatusCard,
-  colors,
-} from "../../src/ui";
+import { WhyVideoModal } from "../../src/ui/WhyVideo";
+import { photos } from "../../src/ui/photos";
+import { sessionPhoto, sessionTagLine, splitTitle, videoLengthLabel } from "../../../shared/player";
+import { Button, Screen, StatusCard, Wordmark, colors } from "../../src/ui";
 import type { PlaybackEventRequest, SessionAudioVariant, SessionMode, SessionPackage } from "../../../shared/types";
 import {
   MODE_COPY,
@@ -44,95 +37,30 @@ import {
   addPlaybackInterval,
   clamp,
   formatClock,
-  getActivePhase,
   getCurrentPrompt,
-  getPlaybackPercent,
   isCompletionEligible,
   measurePlaybackSeconds,
   type PlaybackInterval,
 } from "../../src/lib/sessionPlayer";
 import { fonts } from "../../src/ui/fonts";
 
-const COMPLETION_THRESHOLD = 0.8;
-
-/** Shown while playing when a session has no timed prompts. */
-const GUIDANCE = {
-  interactive: "Stay with Mark's voice. When he hands over, run your own passages of play — he'll bring you back in.",
-  guidance: "Stay with Mark's voice and let the pictures come. He's with you the whole way through.",
-  relaxation: "Settle in and let Mark take you through it. Nothing to do but follow along.",
-} as const;
-
 /**
- * Version picker at the bottom of the player: one row of modes plus a music
- * switch. A mode's explanation shows only once it has been tapped.
+ * The training session: session image and title, Mark's video introduction,
+ * what they're working on, then training style and backing music (which
+ * pick one of the recordings), a simple player, and Reflect once it's done.
  */
-function VersionBar({
-  session,
-  variant,
-  explained,
-  onChoose,
-}: {
-  session: SessionPackage;
-  variant: SessionAudioVariant;
-  explained: SessionMode | null;
-  onChoose: (mode: SessionMode, withMusic: boolean, tapped: boolean) => void;
-}) {
-  const modes = availableModes(session);
-  return (
-    <View style={styles.versionBar} testID="version-bar">
-      <Text style={styles.versionLabel}>CHOOSE YOUR VERSION</Text>
-      <View style={styles.versionRow} accessibilityRole="radiogroup">
-        {modes.map((mode) => {
-          const selected = variant.mode === mode;
-          return (
-            <Pressable
-              key={mode}
-              accessibilityRole="radio"
-              accessibilityState={{ selected, checked: selected }}
-              accessibilityLabel={MODE_COPY[mode].label}
-              onPress={() => onChoose(mode, variant.withMusic, true)}
-              style={({ pressed }) => [styles.versionOption, selected && styles.versionOptionSelected, pressed && styles.pressed]}
-              testID={`version-${mode}`}
-            >
-              <Text style={[styles.versionOptionText, selected && styles.versionOptionTextSelected]} numberOfLines={1}>
-                {MODE_COPY[mode].label}
-              </Text>
-            </Pressable>
-          );
-        })}
-      </View>
-      {hasMusicChoice(session, variant.mode) ? (
-        <Pressable
-          accessibilityRole="switch"
-          accessibilityState={{ checked: variant.withMusic }}
-          accessibilityLabel="Music"
-          onPress={() => onChoose(variant.mode, !variant.withMusic, false)}
-          style={({ pressed }) => [styles.musicToggle, pressed && styles.pressed]}
-          testID="music-toggle"
-        >
-          <View style={[styles.musicBox, variant.withMusic && styles.musicBoxOn]}>
-            {variant.withMusic ? <Text style={styles.musicTick}>✓</Text> : null}
-          </View>
-          <Text style={styles.musicText}>Music</Text>
-        </Pressable>
-      ) : null}
-      {explained ? <Text style={styles.versionDetail}>{MODE_COPY[explained].detail}</Text> : null}
-    </View>
-  );
-}
-
 function PlayerScreen({
   session,
   variant,
   api,
-  versionBar,
+  onChoose,
 }: {
   session: SessionPackage;
   /** The chosen recording; null for older single-file sessions. */
   variant: SessionAudioVariant | null;
   api: ReturnType<typeof getApiFacade>;
-  /** Shown under the play controls. */
-  versionBar?: ReactNode;
+  /** Switch recording: training style and backing music. */
+  onChoose: (mode: SessionMode, withMusic: boolean) => void;
 }) {
   const router = useRouter();
   const network = useNetworkState();
@@ -149,8 +77,8 @@ function PlayerScreen({
   const [restored, setRestored] = useState(false);
   const [finished, setFinished] = useState(false);
   const [playerError, setPlayerError] = useState<string | null>(null);
-  const [seeking, setSeeking] = useState(false);
   const [showVideo, setShowVideo] = useState(false);
+  const [explained, setExplained] = useState<SessionMode | null>(null);
   const lastTime = useRef(0);
   const intervalsRef = useRef(intervals);
   const lastPlaying = useRef(false);
@@ -158,9 +86,7 @@ function PlayerScreen({
   const duration = status.duration > 0 ? status.duration : targetSeconds;
   const currentTime = clamp(status.currentTime, 0, duration);
   const playedSeconds = measurePlaybackSeconds(intervalsRef.current);
-  const thresholdSeconds = targetSeconds * COMPLETION_THRESHOLD;
   const eligible = isCompletionEligible(playedSeconds, targetSeconds);
-  const activePhase = getActivePhase(session.phases, currentTime);
   const currentPrompt = getCurrentPrompt(session.prompts, currentTime);
   const offline = network.isConnected !== true || network.isInternetReachable === false;
 
@@ -263,7 +189,6 @@ function PlayerScreen({
     const previousTime = lastTime.current;
     if (
       status.playing &&
-      !seeking &&
       nextTime > previousTime &&
       nextTime - previousTime <= 5
     ) {
@@ -292,7 +217,6 @@ function PlayerScreen({
     commitIntervals,
     duration,
     persistProgress,
-    seeking,
     session.id,
     status.currentTime,
     status.didJustFinish,
@@ -365,159 +289,189 @@ function PlayerScreen({
     });
   }
 
-  async function seekTo(target: number) {
-    if (!status.isLoaded || status.duration <= 0) return;
-    const nextTime = clamp(target, 0, duration);
-    setSeeking(true);
-    try {
-      await player.seekTo(nextTime);
-      lastTime.current = nextTime;
-      persistProgress(nextTime, intervalsRef.current);
-      reportPlaybackEvent({
-        eventType: "seek",
-        mode,
-        musicEnabled: variant?.withMusic,
-        playbackPositionSeconds: nextTime,
-        clientTimestamp: new Date().toISOString(),
-      });
-    } catch (error) {
-      setPlayerError(error instanceof Error ? error.message : "Unable to seek playback.");
-    } finally {
-      setSeeking(false);
-    }
-  }
-
-  const progressPercent = getPlaybackPercent(
-    currentTime,
-    status.duration,
-    targetSeconds,
-  );
+  const [titleTop, titleBottom] = splitTitle(session.title);
+  const tagLine = sessionTagLine(session);
+  const videoLength = videoLengthLabel(session.whyVideoDurationSeconds);
+  const modes = availableModes(session);
+  const progressRatio = duration > 0 ? currentTime / duration : 0;
+  const done = eligible || finished;
+  const leave = () => {
+    persistProgress(lastTime.current, intervalsRef.current);
+    router.back();
+  };
 
   return (
     <Screen testID="session-player-screen">
-      <Wordmark />
-      <Pressable
-        accessibilityLabel="Back to athlete home"
-        accessibilityRole="button"
-        onPress={() => {
-          persistProgress(lastTime.current, intervalsRef.current);
-          router.back();
-        }}
-        style={[styles.backButton, styles.backButtonPressed]}
-      >
-        <Text style={styles.backButtonText}>← Athlete home</Text>
-      </Pressable>
-      <PageTitle eyebrow={session.focusArea ?? "Live rehearsal"} title={session.title} />
-      <View style={styles.statusGrid}>
-        <StatusCard tone={offline ? "warning" : "success"} title="Connection">
-          {offline ? "Offline · progress is saved on this device" : "Online · ready to play"}
-        </StatusCard>
-        <StatusCard tone="info" title="Audio route">
-          System output · headphones or device speaker
-        </StatusCard>
+      <View style={styles.hero}>
+        <Image source={photos[sessionPhoto(session)]} style={styles.heroPhoto} resizeMode="cover" />
+        <View style={styles.heroShade} />
+        <View style={styles.heroFade} />
+        <View style={styles.heroTop}>
+          <Pressable accessibilityRole="button" accessibilityLabel="Back" onPress={leave} style={styles.back} hitSlop={8}>
+            <Text style={styles.backText}>←</Text>
+          </Pressable>
+          <Wordmark height={22} />
+          <View style={styles.back} />
+        </View>
+        <View style={styles.heroTitle}>
+          <Text style={styles.eyebrow}>OFF-PITCH TRAINING</Text>
+          <Text style={styles.title} accessibilityRole="header">
+            {titleTop}
+            {titleBottom ? <Text style={styles.titleAccent}>{`\n${titleBottom}`}</Text> : null}
+          </Text>
+          {tagLine ? <Text style={styles.tags}>{tagLine.toUpperCase()}</Text> : null}
+        </View>
       </View>
+
       {playerError ? (
         <StatusCard tone="danger" title="Audio unavailable">
           {playerError}
         </StatusCard>
       ) : null}
-      <View style={styles.playerCard}>
-        <View style={styles.phaseRow}>
-          <Text style={styles.phaseLabel}>
-            {activePhase ? `PHASE ${activePhase.number} · ${activePhase.label}` : "GET READY"}
-          </Text>
-          <Text style={styles.clock}>{formatClock(currentTime)}</Text>
-        </View>
-        <ProgressBar
-          value={currentTime}
-          maximumValue={duration}
-          label={`${Math.round(progressPercent)}% · ${formatClock(duration)} total`}
-          testID="session-playback-progress"
-        />
-        <View style={styles.promptCard}>
-          <Text style={styles.promptLabel}>CURRENT PROMPT</Text>
-          <Text style={styles.promptText}>
-            {currentPrompt?.promptText ??
-              (currentTime > 0 || status.playing ? GUIDANCE[mode] : "Press play when you are ready.")}
-          </Text>
-          {currentPrompt?.subText ? (
-            <Text style={styles.promptSubtext}>{currentPrompt.subText}</Text>
-          ) : null}
-        </View>
-        <View style={styles.controls}>
-          <Pressable
-            accessibilityLabel="Back fifteen seconds"
-            accessibilityRole="button"
-            disabled={!status.isLoaded}
-            onPress={() => void seekTo(currentTime - 15)}
-            style={({ pressed }) => [
-              styles.roundControl,
-              styles.roundControlSecondary,
-              pressed && styles.pressed,
-            ]}
-          >
-            <Text style={styles.controlText}>−15</Text>
-          </Pressable>
-          <Pressable
-            accessibilityLabel={status.playing ? "Pause rehearsal" : "Play rehearsal"}
-            accessibilityRole="button"
-            disabled={!status.isLoaded || Boolean(playerError)}
-            onPress={() => void (status.playing ? pause() : play())}
-            style={({ pressed }) => [
-              styles.roundControl,
-              styles.playControl,
-              pressed && styles.pressed,
-            ]}
-          >
-            <Text style={styles.playControlText}>{status.playing ? "Ⅱ" : "▶"}</Text>
-          </Pressable>
-          <Pressable
-            accessibilityLabel="Forward fifteen seconds"
-            accessibilityRole="button"
-            disabled={!status.isLoaded}
-            onPress={() => void seekTo(currentTime + 15)}
-            style={({ pressed }) => [
-              styles.roundControl,
-              styles.roundControlSecondary,
-              pressed && styles.pressed,
-            ]}
-          >
-            <Text style={styles.controlText}>+15</Text>
-          </Pressable>
-        </View>
-        <View style={styles.playbackMeter}>
-          <Text style={styles.playbackMeterLabel}>ACTUAL PLAYBACK</Text>
-          <Text style={styles.playbackMeterValue}>
-            {formatClock(playedSeconds)} / {formatClock(thresholdSeconds)} to finish
-          </Text>
-        </View>
-      </View>
-      {versionBar}
-      {eligible || finished ? (
-        <Button
-          label="Review completion"
-          onPress={() => router.push(`/session/${session.id}/complete${versionQuery(variant)}`)}
-          accessibilityLabel="Review session completion"
-          testID="review-completion-button"
-        />
-      ) : (
-        <StatusCard tone="info" title="Finish the rep">
-          Play through at least {formatClock(thresholdSeconds)} of the session. Seeking does not count skipped audio.
-        </StatusCard>
-      )}
+
       {session.whyVideoUrl ? (
-        <WhyVideoLink
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Video introduction: watch Mark introduce today's training"
           onPress={() => {
             // Pause the session so Mark's video and voice don't overlap.
             if (status.playing) void pause();
             setShowVideo(true);
           }}
-        />
+          style={({ pressed }) => [styles.video, pressed && styles.pressed]}
+          testID="video-introduction"
+        >
+          <View style={styles.videoThumb}>
+            <Image source={photos.composure} style={styles.fill} resizeMode="cover" />
+            <View style={styles.videoPlay}>
+              <Text style={styles.videoPlayGlyph}>▶</Text>
+            </View>
+          </View>
+          <View style={styles.videoText}>
+            <Text style={styles.videoEyebrow}>VIDEO INTRODUCTION</Text>
+            <Text style={styles.videoTitle}>Watch Mark introduce today's training</Text>
+            {videoLength ? <Text style={styles.videoLength}>{videoLength}</Text> : null}
+          </View>
+          <Text style={styles.chevron}>›</Text>
+        </Pressable>
       ) : null}
+
+      {session.workingOn?.length ? (
+        <View style={styles.working}>
+          <Text style={styles.eyebrow}>TODAY YOU'RE WORKING ON</Text>
+          <Text style={styles.workingText}>{session.workingOn.join(" · ")}</Text>
+        </View>
+      ) : null}
+
+      {variant && modes.length > 0 ? (
+        <View style={styles.section} testID="training-style">
+          <Text style={[styles.eyebrow, styles.sectionLabel]}>CHOOSE YOUR TRAINING STYLE</Text>
+          <View style={styles.styles} accessibilityRole="radiogroup">
+            {modes.map((item) => {
+              const selected = variant.mode === item;
+              return (
+                <View key={item} style={[styles.style, selected && styles.styleSelected]}>
+                  <Pressable
+                    accessibilityRole="radio"
+                    accessibilityState={{ selected, checked: selected }}
+                    accessibilityLabel={MODE_COPY[item].label}
+                    onPress={() => onChoose(item, variant.withMusic)}
+                    style={({ pressed }) => [styles.stylePick, pressed && styles.pressed]}
+                    testID={`version-${item}`}
+                  >
+                    <Text style={styles.styleLabel}>{MODE_COPY[item].label}</Text>
+                  </Pressable>
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityLabel={`About ${MODE_COPY[item].label}`}
+                    accessibilityState={{ expanded: explained === item }}
+                    onPress={() => setExplained(explained === item ? null : item)}
+                    style={styles.info}
+                    hitSlop={8}
+                    testID={`about-${item}`}
+                  >
+                    <Text style={[styles.infoText, explained === item && styles.accent]}>i</Text>
+                  </Pressable>
+                </View>
+              );
+            })}
+          </View>
+          {explained ? (
+            <View style={styles.explain} accessibilityLiveRegion="polite">
+              <Text style={styles.explainTitle}>{MODE_COPY[explained].label}</Text>
+              <Text style={styles.explainText}>{MODE_COPY[explained].detail}</Text>
+              <Pressable accessibilityRole="button" accessibilityLabel="Close explanation" onPress={() => setExplained(null)} style={styles.explainClose} hitSlop={8}>
+                <Text style={styles.explainCloseText}>✕</Text>
+              </Pressable>
+            </View>
+          ) : null}
+        </View>
+      ) : null}
+
+      {variant && hasMusicChoice(session, variant.mode) ? (
+        <View style={styles.music}>
+          <Text style={styles.musicGlyph}>♫</Text>
+          <View style={styles.musicText}>
+            <Text style={styles.musicTitle}>Backing music</Text>
+            <Text style={styles.musicCopy}>Add music to your training session</Text>
+          </View>
+          <Switch
+            accessibilityLabel="Backing music"
+            value={variant.withMusic}
+            onValueChange={(next) => onChoose(variant.mode, next)}
+            trackColor={{ false: "rgba(143, 176, 220, 0.3)", true: colors.cyan }}
+            thumbColor="#FFFFFF"
+            testID="music-toggle"
+          />
+        </View>
+      ) : null}
+
+      <View style={styles.player}>
+        <View
+          style={styles.track}
+          accessibilityRole="progressbar"
+          accessibilityValue={{ min: 0, max: Math.round(duration), now: Math.round(currentTime) }}
+          testID="session-playback-progress"
+        >
+          <View style={[styles.trackFill, { width: `${Math.round(progressRatio * 100)}%` }]} />
+          <View style={[styles.knob, { left: `${Math.round(progressRatio * 100)}%` }]} />
+        </View>
+        <View style={styles.times}>
+          <Text style={styles.time}>{formatClock(currentTime)}</Text>
+          <Text style={styles.time}>{formatClock(duration)}</Text>
+        </View>
+        <Pressable
+          accessibilityLabel={status.playing ? "Pause session" : "Play session"}
+          accessibilityRole="button"
+          disabled={!status.isLoaded || Boolean(playerError)}
+          onPress={() => void (status.playing ? pause() : play())}
+          style={({ pressed }) => [styles.play, (!status.isLoaded || playerError) && styles.disabled, pressed && styles.pressed]}
+          testID="play-button"
+        >
+          <Text style={[styles.playGlyph, !status.playing && styles.playGlyphOffset]}>{status.playing ? "Ⅱ" : "▶"}</Text>
+        </Pressable>
+        {!status.isLoaded ? <Text style={styles.status}>Loading audio…</Text> : null}
+        {offline ? <Text style={styles.status}>Offline – your progress is saved on this device.</Text> : null}
+        {currentPrompt ? <Text style={styles.prompt}>{currentPrompt.promptText}</Text> : null}
+      </View>
+
+      <Pressable
+        accessibilityRole="button"
+        accessibilityState={{ disabled: !done }}
+        disabled={!done}
+        onPress={() => router.push(`/session/${session.id}/complete${versionQuery(variant)}`)}
+        style={({ pressed }) => [styles.reflect, done && styles.reflectReady, pressed && styles.pressed]}
+        testID="review-completion-button"
+      >
+        <Text style={[styles.reflectTitle, done && styles.reflectTitleReady]}>
+          {done ? "Finish & reflect  ✓" : "🔒  Finish & reflect"}
+        </Text>
+        {!done ? <Text style={styles.reflectCopy}>Complete the session to unlock</Text> : null}
+      </Pressable>
+
       {showVideo && session.whyVideoUrl ? (
         <WhyVideoModal url={session.whyVideoUrl} onClose={() => setShowVideo(false)} />
       ) : null}
-      <PrivacyNotice />
     </Screen>
   );
 }
@@ -528,7 +482,6 @@ function SessionRouteContent() {
   const [session, setSession] = useState<SessionPackage | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [explained, setExplained] = useState<SessionMode | null>(null);
 
   useEffect(() => {
     let mounted = true;
@@ -550,7 +503,7 @@ function SessionRouteContent() {
         setError(
           caught instanceof LocalApiError
             ? caught.message
-            : "Unable to load this rehearsal.",
+            : "Unable to load this session.",
         );
       })
       .finally(() => {
@@ -564,8 +517,8 @@ function SessionRouteContent() {
   if (loading) {
     return (
       <Screen>
-        <StatusCard tone="info" title="Loading rehearsal">
-          Preparing your private audio space…
+        <StatusCard tone="info" title="Loading session">
+          Getting your training ready…
         </StatusCard>
       </Screen>
     );
@@ -573,7 +526,7 @@ function SessionRouteContent() {
   if (error || !session) {
     return (
       <Screen>
-        <StatusCard tone="danger" title="Rehearsal unavailable">
+        <StatusCard tone="danger" title="Session unavailable">
           {error ?? "This session is not available."}
         </StatusCard>
         <Button label="Back to athlete home" onPress={() => router.replace("/athlete/home")} />
@@ -582,21 +535,16 @@ function SessionRouteContent() {
   }
   const api = getApiFacade({ role: "athlete" });
   const variant = variantFromParams(session, { mode, music });
-  const versionBar = variant ? (
-    <VersionBar
-      session={session}
-      variant={variant}
-      explained={explained}
-      onChoose={(nextMode, withMusic, tapped) => {
-        if (tapped) setExplained(nextMode);
-        // Each recording keeps its own saved position, so switching resumes it.
-        router.setParams({ mode: nextMode, music: withMusic ? "1" : "0" });
-      }}
-    />
-  ) : null;
   // A new recording means a new native player, so key the screen by it.
   return (
-    <PlayerScreen key={variant?.url ?? session.id} session={session} variant={variant} api={api} versionBar={versionBar} />
+    <PlayerScreen
+      key={variant?.url ?? session.id}
+      session={session}
+      variant={variant}
+      api={api}
+      // Each recording keeps its own saved position, so switching resumes it.
+      onChoose={(nextMode, withMusic) => router.setParams({ mode: nextMode, music: withMusic ? "1" : "0" })}
+    />
   );
 }
 
@@ -609,105 +557,149 @@ export default function SessionScreen() {
 }
 
 const styles = {
-  backButton: { marginBottom: 18, paddingHorizontal: 4 },
-  backButtonPressed: { opacity: 0.8 },
-  backButtonText: { fontFamily: fonts.w800, color: colors.cyan, fontSize: 15 },
-  statusGrid: { gap: 12, marginBottom: 16 },
-  playerCard: {
-    backgroundColor: colors.card,
-    borderColor: colors.line,
-    borderWidth: 1,
-    borderRadius: 20,
-    padding: 18,
-    marginBottom: 16,
-    gap: 16,
-  },
-  phaseRow: {
+  hero: { height: 320, marginTop: -20, marginHorizontal: -20, marginBottom: 18, overflow: "hidden" },
+  heroPhoto: { position: "absolute", top: 0, right: 0, bottom: 0, left: 0, width: "100%", height: "100%" },
+  heroShade: { position: "absolute", top: 0, right: 0, bottom: 0, left: 0, backgroundColor: "rgba(5, 10, 25, 0.5)" },
+  heroFade: { position: "absolute", left: 0, right: 0, bottom: 0, height: 120, backgroundColor: "rgba(5, 10, 25, 0.7)" },
+  heroTop: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 18, paddingTop: 16 },
+  back: { width: 42, height: 42, borderRadius: 21, alignItems: "center", justifyContent: "center" },
+  backText: { fontFamily: fonts.w700, color: colors.white, fontSize: 22 },
+  heroTitle: { position: "absolute", left: 20, right: 20, bottom: 20 },
+  eyebrow: { fontFamily: fonts.w700, color: "#9AB5DC", fontSize: 11, letterSpacing: 2.4 },
+  title: { fontFamily: fonts.w800, color: colors.white, fontSize: 38, lineHeight: 42, marginTop: 8 },
+  titleAccent: { color: colors.cyan },
+  tags: { fontFamily: fonts.w700, color: "#B8C9E4", fontSize: 11, letterSpacing: 2.2, marginTop: 10 },
+  video: {
     flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-  },
-  phaseLabel: {
-    fontFamily: fonts.w900,
-    color: colors.magenta,
-    fontSize: 11,
-    letterSpacing: 1,
-    flex: 1,
-  },
-  clock: { fontFamily: fonts.w900, color: colors.white, fontSize: 18 },
-  promptCard: {
-    backgroundColor: "#08122A",
-    borderColor: colors.line,
+    minHeight: 104,
+    marginBottom: 18,
+    overflow: "hidden",
+    borderRadius: 18,
     borderWidth: 1,
+    borderColor: "rgba(143, 176, 220, 0.25)",
+    backgroundColor: "rgba(11, 22, 53, 0.85)",
+  },
+  videoThumb: { width: "32%", alignItems: "center", justifyContent: "center" },
+  fill: { position: "absolute", top: 0, right: 0, bottom: 0, left: 0, width: "100%", height: "100%" },
+  videoPlay: {
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    borderWidth: 2,
+    borderColor: colors.cyan,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(5, 10, 25, 0.5)",
+  },
+  videoPlayGlyph: { color: colors.cyan, fontSize: 15, marginLeft: 3 },
+  videoText: { flex: 1, justifyContent: "center", gap: 5, paddingVertical: 12, paddingLeft: 14, paddingRight: 4 },
+  videoEyebrow: { fontFamily: fonts.w700, color: "#9AB5DC", fontSize: 10, letterSpacing: 1.6 },
+  videoTitle: { fontFamily: fonts.w700, color: colors.white, fontSize: 15, lineHeight: 20 },
+  videoLength: { fontFamily: fonts.w700, color: "#9AB5DC", fontSize: 11, letterSpacing: 1.8 },
+  chevron: { alignSelf: "center", marginRight: 14, color: colors.cyan, fontSize: 26 },
+  working: {
+    marginBottom: 20,
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    borderLeftWidth: 3,
+    borderLeftColor: colors.cyanStrong,
+    borderRadius: 12,
+    backgroundColor: "rgba(0, 139, 206, 0.1)",
+  },
+  workingText: { fontFamily: fonts.w600, color: colors.white, fontSize: 14.5, lineHeight: 21, marginTop: 8 },
+  section: { marginBottom: 18 },
+  sectionLabel: { marginBottom: 12 },
+  styles: { flexDirection: "row", gap: 8 },
+  style: {
+    flex: 1,
+    minHeight: 96,
     borderRadius: 16,
-    padding: 16,
-  },
-  promptLabel: {
-    fontFamily: fonts.w900,
-    color: colors.cyan,
-    fontSize: 11,
-    letterSpacing: 1,
-    marginBottom: 8,
-  },
-  promptText: { fontFamily: fonts.w800, color: colors.white, fontSize: 18, lineHeight: 25 },
-  promptSubtext: { fontFamily: fonts.w400, color: colors.muted, fontSize: 14, lineHeight: 21, marginTop: 8 },
-  controls: { flexDirection: "row", justifyContent: "center", gap: 16 },
-  roundControl: {
-    width: 68,
-    height: 68,
-    borderRadius: 34,
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: "#172746",
-    borderColor: colors.line,
-    borderWidth: 1,
-  },
-  roundControlSecondary: { width: 58, height: 58, borderRadius: 29 },
-  playControl: { backgroundColor: colors.cyanStrong, borderColor: colors.cyanStrong },
-  controlText: { fontFamily: fonts.w900, color: colors.white, fontSize: 16 },
-  playControlText: { fontFamily: fonts.w900, color: "#050A19", fontSize: 25 },
-  pressed: { opacity: 0.78 },
-  playbackMeter: { alignItems: "center" },
-  playbackMeterLabel: {
-    fontFamily: fonts.w900,
-    color: colors.cyan,
-    fontSize: 11,
-    letterSpacing: 1,
-    marginBottom: 5,
-  },
-  playbackMeterValue: { fontFamily: fonts.w800, color: colors.white, fontSize: 15 },
-  versionBar: { gap: 10, marginBottom: 16 },
-  versionLabel: { fontFamily: fonts.w900, color: colors.cyan, fontSize: 11, letterSpacing: 1 },
-  versionRow: {
-    flexDirection: "row",
-    gap: 4,
-    padding: 4,
-    borderRadius: 14,
-    backgroundColor: "rgba(255,255,255,0.06)",
-  },
-  versionOption: {
-    flex: 1,
-    minHeight: 44,
-    borderRadius: 10,
-    alignItems: "center",
-    justifyContent: "center",
-    paddingHorizontal: 4,
-  },
-  versionOptionSelected: { backgroundColor: colors.cyanStrong },
-  versionOptionText: { fontFamily: fonts.w800, color: colors.muted, fontSize: 13 },
-  versionOptionTextSelected: { color: "#050A19" },
-  musicToggle: { flexDirection: "row", alignItems: "center", gap: 8, alignSelf: "flex-start", minHeight: 44 },
-  musicBox: {
-    width: 22,
-    height: 22,
-    borderRadius: 6,
     borderWidth: 1.5,
-    borderColor: colors.line,
+    borderColor: "rgba(143, 176, 220, 0.25)",
+    backgroundColor: "rgba(11, 22, 53, 0.85)",
+  },
+  styleSelected: { borderColor: colors.cyan },
+  stylePick: { flex: 1, justifyContent: "flex-end", paddingHorizontal: 12, paddingTop: 36, paddingBottom: 14 },
+  styleLabel: { fontFamily: fonts.w700, color: colors.white, fontSize: 14, lineHeight: 18 },
+  info: {
+    position: "absolute",
+    top: 8,
+    right: 8,
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    borderWidth: 1.5,
+    borderColor: "#B8C9E4",
     alignItems: "center",
     justifyContent: "center",
   },
-  musicBoxOn: { backgroundColor: colors.cyanStrong, borderColor: colors.cyanStrong },
-  musicTick: { fontFamily: fonts.w900, color: "#050A19", fontSize: 13 },
-  musicText: { fontFamily: fonts.w700, color: colors.white, fontSize: 14 },
-  versionDetail: { fontFamily: fonts.w400, color: colors.muted, fontSize: 14, lineHeight: 20 },
+  infoText: { fontFamily: fonts.w800, color: "#B8C9E4", fontSize: 12 },
+  accent: { color: colors.cyan },
+  explain: {
+    marginTop: 10,
+    paddingVertical: 14,
+    paddingLeft: 16,
+    paddingRight: 44,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: "rgba(105, 224, 250, 0.35)",
+    backgroundColor: "rgba(0, 139, 206, 0.12)",
+  },
+  explainTitle: { fontFamily: fonts.w700, color: colors.white, fontSize: 14 },
+  explainText: { fontFamily: fonts.w400, color: "#CFE0F7", fontSize: 13.5, lineHeight: 20, marginTop: 4 },
+  explainClose: { position: "absolute", top: 10, right: 12, width: 28, height: 28, alignItems: "center", justifyContent: "center" },
+  explainCloseText: { fontFamily: fonts.w700, color: "#B8C9E4", fontSize: 14 },
+  music: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 14,
+    marginBottom: 22,
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: "rgba(143, 176, 220, 0.2)",
+    backgroundColor: "rgba(11, 22, 53, 0.85)",
+  },
+  musicGlyph: { color: colors.cyan, fontSize: 22 },
+  musicText: { flex: 1 },
+  musicTitle: { fontFamily: fonts.w700, color: colors.white, fontSize: 15 },
+  musicCopy: { fontFamily: fonts.w400, color: "#A4B6D4", fontSize: 12.5, marginTop: 2 },
+  player: { alignItems: "center", gap: 10, marginBottom: 20 },
+  track: { alignSelf: "stretch", height: 6, borderRadius: 99, backgroundColor: "rgba(143, 176, 220, 0.18)", justifyContent: "center" },
+  trackFill: { position: "absolute", left: 0, top: 0, bottom: 0, borderRadius: 99, backgroundColor: colors.cyan },
+  knob: { position: "absolute", width: 16, height: 16, marginLeft: -8, borderRadius: 8, backgroundColor: colors.cyan },
+  times: { alignSelf: "stretch", flexDirection: "row", justifyContent: "space-between" },
+  time: { fontFamily: fonts.w600, color: "#A4B6D4", fontSize: 13 },
+  play: {
+    width: 84,
+    height: 84,
+    marginTop: 4,
+    borderRadius: 42,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: colors.cyan,
+  },
+  playGlyph: { fontFamily: fonts.w900, color: "#041126", fontSize: 30 },
+  playGlyphOffset: { marginLeft: 5 },
+  status: { fontFamily: fonts.w500, color: "#8FA3C7", fontSize: 12.5, textAlign: "center" },
+  prompt: { fontFamily: fonts.w500, color: "#CFE0F7", fontSize: 14, lineHeight: 20, textAlign: "center" },
+  reflect: {
+    minHeight: 72,
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 4,
+    marginBottom: 8,
+    padding: 14,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: "rgba(143, 176, 220, 0.22)",
+    backgroundColor: "rgba(11, 22, 53, 0.6)",
+  },
+  reflectReady: { borderColor: colors.cyanStrong, backgroundColor: colors.cyanStrong },
+  reflectTitle: { fontFamily: fonts.w700, color: "#7F97C0", fontSize: 16 },
+  reflectTitleReady: { color: "#041126" },
+  reflectCopy: { fontFamily: fonts.w400, color: "#7F97C0", fontSize: 12.5 },
+  disabled: { opacity: 0.5 },
+  pressed: { opacity: 0.8 },
 } as const;

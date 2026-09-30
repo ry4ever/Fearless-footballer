@@ -54,7 +54,7 @@ export function PendingNote({ pending }: { pending: number }) {
   if (pending === 0) return null;
   return (
     <p className="live-note" role="status">
-      {pending === 1 ? "1 rep is" : `${pending} reps are`} saved on this device and will sync when you're back online.
+      {pending === 1 ? "1 session is" : `${pending} sessions are`} saved on this device and will sync when you're back online.
     </p>
   );
 }

@@ -24,5 +24,14 @@
       "music": "Relaxation - Dominate the Midfield - With Music.mp3",
       "noMusic": "Relaxation - Dominate the Midfield - Without Music.mp3"
     }
-  }
+  },
+  "tags": [
+    "Midfield Play",
+    "Awareness"
+  ],
+  "workingOn": [
+    "Getting your picture early",
+    "Playing forward on the half turn",
+    "Setting the tempo of the game"
+  ]
 }

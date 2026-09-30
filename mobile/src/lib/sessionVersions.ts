@@ -1,3 +1,4 @@
+import { TRAINING_STYLES } from "../../../shared/player";
 import type { SessionAudioVariant, SessionMode, SessionPackage } from "../../../shared/types";
 
 /**
@@ -8,20 +9,8 @@ import type { SessionAudioVariant, SessionMode, SessionPackage } from "../../../
 
 export const MODE_ORDER: SessionMode[] = ["interactive", "guidance", "relaxation"];
 
-export const MODE_COPY: Record<SessionMode, { label: string; detail: string }> = {
-  interactive: {
-    label: "Interactive",
-    detail: "Guided in, then 45-second blocks to run your own passages of play.",
-  },
-  guidance: {
-    label: "Full Guidance",
-    detail: "Mark's voice with you the whole way through.",
-  },
-  relaxation: {
-    label: "Relaxation",
-    detail: "Deeper and calmer — for recovery, downtime or before sleep.",
-  },
-};
+/** Training style names and Mark's one-line explanations (shared with web). */
+export const MODE_COPY = TRAINING_STYLES;
 
 export function isSessionMode(value: unknown): value is SessionMode {
   return value === "interactive" || value === "guidance" || value === "relaxation";

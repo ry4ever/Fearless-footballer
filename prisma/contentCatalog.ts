@@ -23,6 +23,10 @@ export interface CatalogSession {
   audio: Record<AudioMode, Record<MusicVariant, string>> | null;
   /** Source file name of the "Why this works?" video, in the audio folder. */
   video?: string;
+  /** Short labels shown under the title in the player. */
+  tags: string[];
+  /** "Today you're working on" points. */
+  workingOn: string[];
   descriptionMarkdown: string | null;
 }
 
@@ -74,6 +78,8 @@ export function readCatalog(root: string): { sessions: CatalogSession[]; program
       audioSourceFolder: meta.audioSourceFolder,
       audio: meta.audio ?? null,
       video: typeof meta.video === "string" ? meta.video : undefined,
+      tags: stringList(meta.tags),
+      workingOn: stringList(meta.workingOn),
       descriptionMarkdown: existsSync(descriptionPath) ? playerFacing(readFileSync(descriptionPath, "utf8")) : null,
     });
   }
@@ -93,6 +99,10 @@ export function readCatalog(root: string): { sessions: CatalogSession[]; program
     : [];
 
   return { sessions, programmes };
+}
+
+function stringList(value: unknown): string[] {
+  return Array.isArray(value) ? value.filter((item): item is string => typeof item === "string" && item.trim() !== "") : [];
 }
 
 /** Editorial notes ("> **Draft for Mark to review**…") stay out of the app. */

@@ -114,8 +114,14 @@ model Session {
   descriptionMarkdown String?
   /// Listed in the library but not playable yet (no audio recorded).
   comingSoon          Boolean            @default(false)
-  /// "Why this works?" video: a media key or absolute URL.
+  /// Mark's video introduction: a media key or absolute URL.
   videoUrl            String?
+  /// Length of that video, for the "2 MIN" label.
+  videoDurationSeconds Int?
+  /// Short labels under the title, e.g. ["Confidence", "Match Preparation"].
+  tags                String[]           @default([])
+  /// "Today you're working on" points, a few words each.
+  workingOn           String[]           @default([])
   sessionCompletions  SessionCompleted[]
   phases              SessionPhase[]
   prompts             SessionPrompt[]

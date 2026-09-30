@@ -179,7 +179,7 @@ export function LiveParentDashboard({ link }: LiveParentDashboardProps) {
             {metrics.lastRep.duration === "No completed reps" ? (
               <>
                 <strong style={{ fontSize: 18 }}>None yet</strong>
-                <small>Their first rep will show here.</small>
+                <small>Their first session will show here.</small>
               </>
             ) : (
               <>

@@ -3,21 +3,6 @@ import { useVideoPlayer, VideoView } from "expo-video";
 import { colors } from "./index";
 import { fonts } from "./fonts";
 
-/** "Why this works?" link shown under the player's completion note. */
-export function WhyVideoLink({ onPress }: { onPress: () => void }) {
-  return (
-    <Pressable
-      accessibilityRole="button"
-      accessibilityLabel="Why this works? Play the video"
-      onPress={onPress}
-      style={({ pressed }) => [styles.link, pressed && styles.pressed]}
-      testID="why-this-works-link"
-    >
-      <Text style={styles.linkText}>▶ Why this works?</Text>
-    </Pressable>
-  );
-}
-
 /**
  * Full-screen video with native controls. Mounted only while open, so the
  * player starts on open and is released on close.
@@ -45,8 +30,6 @@ export function WhyVideoModal({ url, onClose }: { url: string; onClose: () => vo
 }
 
 const styles = {
-  link: { alignSelf: "center", minHeight: 44, justifyContent: "center", paddingHorizontal: 12, marginBottom: 12 },
-  linkText: { fontFamily: fonts.w800, color: colors.cyan, fontSize: 15, textDecorationLine: "underline" },
   pressed: { opacity: 0.75 },
   backdrop: { flex: 1, backgroundColor: "#000", justifyContent: "center" },
   video: { width: "100%", height: "100%" },

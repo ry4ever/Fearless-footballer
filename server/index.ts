@@ -411,6 +411,9 @@ function toSessionPackage(session: SessionWithPackageParts): SessionPackage {
     comingSoon: session.comingSoon || undefined,
     audio: session.comingSoon ? undefined : audio,
     whyVideoUrl: session.videoUrl ? mediaUrl(session.videoUrl) : undefined,
+    whyVideoDurationSeconds: session.videoUrl ? (session.videoDurationSeconds ?? undefined) : undefined,
+    tags: session.tags.length ? session.tags : undefined,
+    workingOn: session.workingOn.length ? session.workingOn : undefined,
   };
 }
 

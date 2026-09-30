@@ -25,5 +25,14 @@
   "sortOrder": 4,
   "descriptionStatus": "final",
   "audioSourceFolder": "Play Your Next Game",
-  "video": "intro playing your next game.mov"
+  "video": "intro playing your next game.mov",
+  "tags": [
+    "Match Preparation",
+    "Game Awareness"
+  ],
+  "workingOn": [
+    "Facing your next opponent",
+    "Running your key moments",
+    "Arriving ready for kick-off"
+  ]
 }

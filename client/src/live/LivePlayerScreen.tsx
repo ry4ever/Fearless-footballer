@@ -1,5 +1,20 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { ArrowLeft, ArrowRight, Check, CirclePlay, Headphones, Pause, Play, RotateCcw, X } from "lucide-react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  ArrowLeft,
+  ArrowRight,
+  Check,
+  ChevronRight,
+  Flower2,
+  Footprints,
+  Info,
+  Lock,
+  Music,
+  Pause,
+  Play,
+  UserRound,
+  X,
+} from "lucide-react";
+import { sessionPhoto, sessionTagLine, splitTitle, TRAINING_STYLES, videoLengthLabel } from "@shared/player";
 import type {
   CompletionSyncResponse,
   PlaybackEventRequest,
@@ -13,7 +28,9 @@ import { audioEngine } from "../audio/audioEngine";
 import { FearlessWordmark } from "../components/icons/CustomIcons";
 import { apiClient } from "../lib/apiClient";
 import { isRetryableError, offlineQueue } from "../lib/offlineQueue";
+import { photo } from "../lib/onboardingOptions";
 import { useSession } from "./session";
+import "./player.css";
 
 export type CompletionOutcome =
   | { kind: "synced"; response: CompletionSyncResponse }
@@ -28,8 +45,11 @@ interface LivePlayerScreenProps {
 interface PlayerCoreProps extends LivePlayerScreenProps {
   /** The chosen recording; null for older single-file sessions. */
   variant: SessionAudioVariant | null;
-  /** Version picker shown under the play controls. */
-  versionBar?: ReactNode;
+  modes: SessionMode[];
+  onChooseMode: (mode: SessionMode) => void;
+  /** Whether the chosen style was recorded both with and without music. */
+  hasMusicChoice: boolean;
+  onChooseMusic: (withMusic: boolean) => void;
 }
 
 /** The server only accepts a completion after 80% of the session. */
@@ -38,14 +58,9 @@ const REQUIRED_RATIO = 0.8;
 const AUDIO_LOAD_TIMEOUT_MS = 8000;
 
 const MODE_ORDER: SessionMode[] = ["interactive", "guidance", "relaxation"];
+const MODE_ICONS: Record<SessionMode, typeof Play> = { interactive: Footprints, guidance: UserRound, relaxation: Flower2 };
 
-const MODE_COPY: Record<SessionMode, { label: string; detail: string }> = {
-  interactive: { label: "Interactive", detail: "Guided in, then 45-second blocks to run your own passages of play." },
-  guidance: { label: "Full Guidance", detail: "Mark's voice with you the whole way through." },
-  relaxation: { label: "Relaxation", detail: "Deeper and calmer — for recovery, downtime or before sleep." },
-};
-
-/** The recording for a mode and music choice, falling back to the other music option. */
+/** The recording for a style and music choice, falling back to the other music option. */
 function pickVariant(session: SessionPackage, mode: SessionMode, withMusic: boolean): SessionAudioVariant | null {
   const variants = session.audio ?? [];
   return (
@@ -56,68 +71,39 @@ function pickVariant(session: SessionPackage, mode: SessionMode, withMusic: bool
 }
 
 /**
- * Opens ready to play Interactive with music. The version bar at the bottom
- * switches recordings; each has its own timeline, so switching starts the
- * new one from the beginning. A version's explanation shows once it's tapped.
+ * The training session: session image and title, Mark's video introduction,
+ * what they're working on, then two choices – training style and backing
+ * music – which pick one of the recordings. Reflect unlocks once the session
+ * is done: introduce → choose → train → reflect.
  */
 export function LivePlayerScreen({ session, onBack, onComplete }: LivePlayerScreenProps) {
   const modes = MODE_ORDER.filter((mode) => session.audio?.some((v) => v.mode === mode));
   const [mode, setMode] = useState<SessionMode>(modes[0] ?? "interactive");
   const [withMusic, setWithMusic] = useState(true);
-  const [explained, setExplained] = useState<SessionMode | null>(null);
   const variant = pickVariant(session, mode, withMusic);
   const hasMusicChoice =
     Boolean(session.audio?.some((v) => v.mode === mode && v.withMusic)) &&
     Boolean(session.audio?.some((v) => v.mode === mode && !v.withMusic));
 
-  const versionBar =
-    modes.length > 0 ? (
-      <section className="version-bar" aria-label="Choose your version">
-        <span className="eyebrow">CHOOSE YOUR VERSION</span>
-        <div className="live-segment" role="group" aria-label="Version">
-          {modes.map((item) => (
-            <button
-              key={item}
-              type="button"
-              aria-pressed={mode === item}
-              onClick={() => {
-                setMode(item);
-                setExplained(item);
-              }}
-            >
-              {MODE_COPY[item].label}
-            </button>
-          ))}
-        </div>
-        {hasMusicChoice && (
-          <label className="live-check version-music">
-            <input type="checkbox" checked={withMusic} onChange={(e) => setWithMusic(e.target.checked)} />
-            <span>Music</span>
-          </label>
-        )}
-        {explained && (
-          <p className="live-note version-detail" aria-live="polite">
-            {MODE_COPY[explained].detail}
-          </p>
-        )}
-      </section>
-    ) : null;
-
+  // Each recording has its own timeline, so switching starts it from the beginning.
   return (
     <PlayerCore
       key={variant?.url ?? session.id}
       session={session}
       variant={variant}
-      versionBar={versionBar}
+      modes={modes}
+      onChooseMode={setMode}
+      hasMusicChoice={hasMusicChoice}
+      onChooseMusic={setWithMusic}
       onBack={onBack}
       onComplete={onComplete}
     />
   );
 }
 
-/** Shown while playing when a session has no timed prompts. */
+/** Shown while playing without audio when a session has no timed prompts. */
 const GUIDANCE: Record<SessionMode, string> = {
-  interactive: "Stay with Mark's voice. When he hands over, run your own passages of play — he'll bring you back in.",
+  interactive: "Stay with Mark's voice. When he hands over, run your own passages of play – he'll bring you back in.",
   guidance: "Stay with Mark's voice and let the pictures come. He's with you the whole way through.",
   relaxation: "Settle in and let Mark take you through it. Nothing to do but follow along.",
 };
@@ -141,7 +127,7 @@ function newIdempotencyKey(sessionId: string) {
   return `web_${sessionId}_${random}`;
 }
 
-function PlayerCore({ session, variant, versionBar, onBack, onComplete }: PlayerCoreProps) {
+function PlayerCore({ session, variant, modes, onChooseMode, hasMusicChoice, onChooseMusic, onBack, onComplete }: PlayerCoreProps) {
   const { user } = useSession();
   // Each recording has its own length; the 80% rule is measured against it.
   const duration = variant?.durationSeconds ?? session.defaultDurationSeconds;
@@ -163,6 +149,7 @@ function PlayerCore({ session, variant, versionBar, onBack, onComplete }: Player
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState("");
   const [showVideo, setShowVideo] = useState(false);
+  const [explained, setExplained] = useState<SessionMode | null>(null);
 
   const voiceRef = useRef<HTMLAudioElement | null>(null);
   const musicRef = useRef<HTMLAudioElement | null>(null);
@@ -170,14 +157,9 @@ function PlayerCore({ session, variant, versionBar, onBack, onComplete }: Player
   const idempotencyKey = useRef(newIdempotencyKey(session.id));
   const dialogRef = useRef<HTMLDivElement | null>(null);
 
-  const phases = useMemo(() => [...session.phases].sort((a, b) => a.startSeconds - b.startSeconds), [session.phases]);
   const prompts = useMemo(
     () => [...session.prompts].sort((a, b) => a.timestampSeconds - b.timestampSeconds),
     [session.prompts],
-  );
-  const phaseIndex = Math.max(
-    0,
-    phases.findIndex((phase) => position >= phase.startSeconds && position < phase.endSeconds),
   );
   const prompt = [...prompts].reverse().find((item) => item.timestampSeconds <= position) ?? null;
   const eligible = listened >= requiredSeconds;
@@ -328,17 +310,6 @@ function PlayerCore({ session, variant, versionBar, onBack, onComplete }: Player
     report(next ? "start" : "pause", position);
   }
 
-  function seekBy(delta: number) {
-    const target = Math.max(0, Math.min(duration, position + delta));
-    const voice = voiceRef.current;
-    if (audioState === "ready" && voice) {
-      voice.currentTime = target;
-      lastTimeRef.current = target;
-    }
-    setPosition(target);
-    report("seek", target);
-  }
-
   function openReflection() {
     setPlaying(false);
     setShowReflection(true);
@@ -367,182 +338,185 @@ function PlayerCore({ session, variant, versionBar, onBack, onComplete }: Player
         onComplete({ kind: "queued" });
         return;
       }
-      setSubmitError(error instanceof Error ? error.message : "We couldn't save this rep.");
+      setSubmitError(error instanceof Error ? error.message : "We couldn't save this session.");
       setSubmitting(false);
     }
   }
 
-  const remainingToQualify = Math.max(0, requiredSeconds - listened);
+  const [titleTop, titleBottom] = splitTitle(session.title);
+  const tagLine = sessionTagLine(session);
+  const videoLength = videoLengthLabel(session.whyVideoDurationSeconds);
+  // Older single-file sessions mix in a music bed the player can switch itself.
+  const canChooseMusic = variant ? hasMusicChoice : true;
+  const chooseMusic = (next: boolean) => (variant ? onChooseMusic(next) : setMusic(next));
 
   return (
-    <div
-      className="screen player-screen-high-res"
-      style={{
-        backgroundImage: `linear-gradient(180deg, rgba(6,10,26,.65) 0%, rgba(6,10,26,.95) 75%)${
-          session.heroImageUrl ? `, url('${session.heroImageUrl}')` : ""
-        }`,
-        backgroundPosition: "center top",
-        backgroundSize: "cover",
-      }}
-    >
-      <header className="player-header-clean">
-        <button type="button" className="back-button" onClick={onBack} aria-label="Back to HQ">
-          <ArrowLeft size={20} />
-        </button>
-        <div style={{ display: "flex" }}>
-          <FearlessWordmark height={26} />
+    <div className="screen ps-screen">
+      <section className="ps-hero">
+        <img src={photo(sessionPhoto(session))} alt="" />
+        <header className="ps-top">
+          <button type="button" className="ps-back" onClick={onBack} aria-label="Back">
+            <ArrowLeft size={20} />
+          </button>
+          <FearlessWordmark height={22} />
+          <span className="ps-back-spacer" aria-hidden="true" />
+        </header>
+        <div className="ps-title">
+          <span className="ps-eyebrow">OFF-PITCH TRAINING</span>
+          <h1>
+            {titleTop}
+            {titleBottom && (
+              <>
+                <br />
+                <span>{titleBottom}</span>
+              </>
+            )}
+          </h1>
+          {tagLine && <p className="ps-tags">{tagLine}</p>}
         </div>
-        {variant ? (
-          <span style={{ width: 42 }} aria-hidden="true" />
-        ) : (
+      </section>
+
+      <main className="ps-body">
+        {session.whyVideoUrl && (
           <button
             type="button"
-            className="icon-button"
-            onClick={() => setMusic((value) => !value)}
-            aria-pressed={music}
-            style={{ width: "auto", minHeight: 36, background: "rgba(255,255,255,0.08)", border: "none", color: "#69E0FA", padding: "6px 12px", borderRadius: 100, fontSize: "0.75rem", fontWeight: 700, whiteSpace: "nowrap" }}
+            className="ps-video"
+            onClick={() => {
+              // Pause the session so Mark's video and voice don't overlap.
+              setPlaying(false);
+              setShowVideo(true);
+            }}
           >
-            Music {music ? "on" : "off"}
+            <span className="ps-video-thumb">
+              <img src={photo("composure")} alt="" />
+              <span className="ps-video-play" aria-hidden="true">
+                <Play size={16} fill="currentColor" />
+              </span>
+            </span>
+            <span className="ps-video-text">
+              <span className="ps-eyebrow">VIDEO INTRODUCTION</span>
+              <strong>Watch Mark introduce today's training</strong>
+              {videoLength && <small>{videoLength}</small>}
+            </span>
+            <ChevronRight size={20} className="ps-video-chevron" />
           </button>
         )}
-      </header>
 
-      <main className="player-body">
-        <div className="player-title-block">
-          <h1 className="player-main-title">{session.title}</h1>
-        </div>
-
-        {phases.length > 0 && (
-          <ol
-            className="phase-stepper-container"
-            aria-label="Session phases"
-            style={{ display: "grid", gridTemplateColumns: `repeat(${phases.length}, 1fr)`, gap: 8, margin: "16px 0 8px", padding: 0, listStyle: "none" }}
-          >
-            {phases.map((phase, index) => {
-              const isActive = index === phaseIndex;
-              const isPast = index < phaseIndex;
-              return (
-                <li
-                  key={phase.number}
-                  aria-current={isActive ? "step" : undefined}
-                  style={{
-                    padding: "8px 6px",
-                    borderRadius: 8,
-                    textAlign: "center",
-                    background: isActive ? "rgba(105,224,250,0.15)" : isPast ? "rgba(255,255,255,0.06)" : "rgba(255,255,255,0.02)",
-                    border: isActive ? "1.5px solid #69E0FA" : "1px solid rgba(255,255,255,0.08)",
-                    color: isActive ? "#69E0FA" : isPast ? "#fff" : "rgba(255,255,255,0.5)",
-                    fontSize: "0.75rem",
-                    fontWeight: 800,
-                    letterSpacing: 1,
-                  }}
-                >
-                  {index + 1}. {phase.label}
-                </li>
-              );
-            })}
-          </ol>
+        {session.workingOn && session.workingOn.length > 0 && (
+          <section className="ps-working" aria-label="Today you're working on">
+            <span className="ps-eyebrow">TODAY YOU'RE WORKING ON</span>
+            <p>{session.workingOn.join(" · ")}</p>
+          </section>
         )}
 
-        <div className="central-play-node-wrap">
-          <div className={`audio-glow-ring ${playing ? "pulsing" : ""}`} />
-          <button
-            type="button"
-            className="play-node-button"
-            onClick={togglePlay}
-            disabled={audioState === "loading"}
-            aria-label={playing ? "Pause session" : "Play session"}
-          >
-            {playing ? <Pause size={38} className="play-icon-glow" /> : <Play size={38} className="play-icon-glow" style={{ marginLeft: 4 }} />}
-          </button>
-        </div>
+        {modes.length > 0 && (
+          <section aria-label="Choose your training style">
+            <span className="ps-eyebrow ps-section-label">CHOOSE YOUR TRAINING STYLE</span>
+            <div className="ps-styles" style={{ gridTemplateColumns: `repeat(${modes.length}, 1fr)` }}>
+              {modes.map((item) => {
+                const Icon = MODE_ICONS[item];
+                const selected = item === mode;
+                return (
+                  <div key={item} className={`ps-style ${selected ? "selected" : ""}`}>
+                    <button type="button" className="ps-style-pick" aria-pressed={selected} onClick={() => onChooseMode(item)}>
+                      <Icon size={24} />
+                      <span>{TRAINING_STYLES[item].label}</span>
+                    </button>
+                    <button
+                      type="button"
+                      className="ps-style-info"
+                      aria-label={`About ${TRAINING_STYLES[item].label}`}
+                      aria-expanded={explained === item}
+                      onClick={() => setExplained(explained === item ? null : item)}
+                    >
+                      <Info size={16} />
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
+            {explained && (
+              <div className="ps-explain" role="note" aria-live="polite">
+                <strong>{TRAINING_STYLES[explained].label}</strong>
+                <p>{TRAINING_STYLES[explained].detail}</p>
+                <button type="button" onClick={() => setExplained(null)} aria-label="Close explanation">
+                  <X size={16} />
+                </button>
+              </div>
+            )}
+          </section>
+        )}
 
-        <div className="contextual-prompt-box" aria-live="polite">
-          <p className="prompt-body-text" style={{ fontSize: "0.95rem", lineHeight: 1.4 }}>
-            {prompt ? prompt.promptText : position > 0 || playing ? GUIDANCE[mode] : "Find a quiet spot, put your headphones on, and press play when you're ready."}
-          </p>
-          {prompt?.subText && <p className="live-note">{prompt.subText}</p>}
-        </div>
-
-        <div className="scrubber-section">
-          <div className="scrubber-time-row">
-            <span className="time-elapsed">{formatTime(position)}</span>
-            <span className="time-remaining">{formatTime(duration)}</span>
+        {canChooseMusic && (
+          <div className="ps-music">
+            <Music size={22} className="ps-music-icon" />
+            <span className="ps-music-text">
+              <strong>Backing music</strong>
+              <small>Add music to your training session</small>
+            </span>
+            <button
+              type="button"
+              role="switch"
+              aria-checked={music}
+              aria-label="Backing music"
+              className={`ps-switch ${music ? "on" : ""}`}
+              onClick={() => chooseMusic(!music)}
+            >
+              <span />
+            </button>
           </div>
+        )}
+
+        <section className="ps-player" aria-label="Session audio">
           <div
-            className="scrubber-track-container"
+            className="ps-track"
             role="progressbar"
             aria-label="Session progress"
             aria-valuemin={0}
             aria-valuemax={duration}
             aria-valuenow={Math.round(position)}
           >
-            <div className="scrubber-fill-bar" style={{ width: `${(position / duration) * 100}%` }} />
+            <span className="ps-track-fill" style={{ width: `${(position / duration) * 100}%` }} />
           </div>
-        </div>
-
-        <div className="transport-controls-row">
-          <button type="button" className="transport-skip-btn" onClick={() => seekBy(-15)} aria-label="Back 15 seconds">
-            <RotateCcw size={18} />
-            <span>-15s</span>
-          </button>
+          <div className="ps-times">
+            <span>{formatTime(position)}</span>
+            <span>{formatTime(duration)}</span>
+          </div>
           <button
             type="button"
-            className="transport-center-toggle"
+            className={`ps-play ${playing ? "playing" : ""}`}
             onClick={togglePlay}
             disabled={audioState === "loading"}
-            aria-label={playing ? "Pause" : "Play"}
+            aria-label={playing ? "Pause session" : "Play session"}
           >
-            {playing ? <Pause size={22} /> : <Play size={22} style={{ marginLeft: 2 }} />}
+            {playing ? <Pause size={30} fill="currentColor" /> : <Play size={30} fill="currentColor" style={{ marginLeft: 4 }} />}
           </button>
-          <button type="button" className="transport-skip-btn" onClick={() => seekBy(15)} aria-label="Forward 15 seconds">
-            <RotateCcw size={18} style={{ transform: "scaleX(-1)" }} />
-            <span>+15s</span>
-          </button>
-        </div>
-
-        <div className="headphones-status-pill" role="status">
-          <Headphones size={13} />
-          <span>
-            {audioState === "loading"
-              ? "Loading audio…"
-              : audioState === "ready"
-                ? "Headphones recommended"
-                : "Audio unavailable – follow the prompts at your own pace"}
-          </span>
-        </div>
-
-        {versionBar}
-
-        <div style={{ marginTop: 14 }}>
-          <button
-            type="button"
-            onClick={openReflection}
-            className="primary-button"
-            disabled={!eligible}
-            style={{ width: "100%", padding: 14, fontSize: "0.95rem" }}
-          >
-            Finish & reflect <Check size={18} />
-          </button>
-          {!eligible && (
-            <p className="live-note" style={{ marginTop: 8 }}>
-              Keep going – {Math.ceil(remainingToQualify / 60)} more min to complete this rep.
+          {audioState !== "ready" && (
+            <p className="ps-status" role="status">
+              {audioState === "loading" ? "Loading audio…" : "Audio unavailable – follow the prompts at your own pace."}
             </p>
           )}
-          {session.whyVideoUrl && (
-            <button
-              type="button"
-              className="why-video-link"
-              onClick={() => {
-                // Pause the session so Mark's video and voice don't overlap.
-                setPlaying(false);
-                setShowVideo(true);
-              }}
-            >
-              <CirclePlay size={16} /> Why this works?
-            </button>
+          {(prompt || (audioState === "unavailable" && (playing || position > 0))) && (
+            <p className="ps-prompt" aria-live="polite">
+              {prompt ? prompt.promptText : GUIDANCE[mode]}
+            </p>
           )}
-        </div>
+        </section>
+
+        <button type="button" className={`ps-reflect ${eligible ? "ready" : ""}`} onClick={openReflection} disabled={!eligible}>
+          {eligible ? (
+            <strong>
+              Finish & reflect <Check size={18} />
+            </strong>
+          ) : (
+            <>
+              <strong>
+                <Lock size={16} /> Finish & reflect
+              </strong>
+              <small>Complete the session to unlock</small>
+            </>
+          )}
+        </button>
       </main>
 
       {showVideo && session.whyVideoUrl && (
@@ -553,7 +527,7 @@ function PlayerCore({ session, variant, versionBar, onBack, onComplete }: Player
             if (event.target === event.currentTarget) setShowVideo(false);
           }}
         >
-          <div className="why-video-dialog" role="dialog" aria-modal="true" aria-label="Why this works">
+          <div className="why-video-dialog" role="dialog" aria-modal="true" aria-label="Video introduction">
             <button
               type="button"
               className="why-video-close"
@@ -578,7 +552,7 @@ function PlayerCore({ session, variant, versionBar, onBack, onComplete }: Player
             aria-labelledby="reflection-title"
             style={{ maxHeight: "90vh", overflowY: "auto" }}
           >
-            <span className="eyebrow">OFF-PITCH REFLECTION</span>
+            <span className="eyebrow">REFLECT</span>
             <h3 id="reflection-title">How do you feel about your next match?</h3>
             <div className="live-choice-list" role="group" aria-label="How you feel">
               {FEELINGS.map((item) => (
@@ -613,11 +587,9 @@ function PlayerCore({ session, variant, versionBar, onBack, onComplete }: Player
             )}
             <div className="live-button-row">
               <button type="button" className="primary-button" onClick={submit} disabled={submitting || !eligible}>
-                {submitting ? "Saving…" : "Save rep"} <ArrowRight size={18} />
+                {submitting ? "Saving…" : "Save"} <ArrowRight size={18} />
               </button>
-              {!eligible && (
-                <p className="live-note">Listen a little longer to complete this rep.</p>
-              )}
+              {!eligible && <p className="live-note">Keep training a little longer to finish this session.</p>}
               <button type="button" className="live-link-button" onClick={() => setShowReflection(false)} disabled={submitting}>
                 Back to session
               </button>

@@ -101,8 +101,14 @@ export interface SessionPackage {
   comingSoon?: boolean;
   /** Each recorded version; absent for older single-file sessions. */
   audio?: SessionAudioVariant[];
-  /** "Why this works?" video, when the session has one. */
+  /** Mark's video introduction to the session, when it has one. */
   whyVideoUrl?: string;
+  /** Length of that video in seconds. */
+  whyVideoDurationSeconds?: number;
+  /** Short labels under the title, e.g. ["Confidence", "Match Preparation"]. */
+  tags?: string[];
+  /** "Today you're working on" points. */
+  workingOn?: string[];
   phases: SessionPhase[];
   prompts: SessionPrompt[];
 }

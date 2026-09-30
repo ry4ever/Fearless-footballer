@@ -25,8 +25,8 @@ export function LiveCompleteScreen({ outcome, onBackToHQ }: LiveCompleteScreenPr
         </h1>
         <p className="complete-sub">
           {synced
-            ? "One rep closer to playing your next game with intent."
-            : "You're offline, so this rep will sync automatically when you reconnect. Your streak updates then."}
+            ? "One session closer to playing your next game with intent."
+            : "You're offline, so this session will sync automatically when you reconnect. Your streak updates then."}
         </p>
 
         {synced && (
@@ -43,7 +43,7 @@ export function LiveCompleteScreen({ outcome, onBackToHQ }: LiveCompleteScreenPr
             </div>
             <div>
               <strong>{delta > 0 ? `+${delta}` : delta === 0 ? "±0" : delta}</strong>
-              <span>from this rep</span>
+              <span>from this session</span>
             </div>
           </div>
         )}

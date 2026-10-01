@@ -1,8 +1,8 @@
-import { useState } from "react";
-import { Bell, ChevronRight, Flame, Play } from "lucide-react";
+import { ChevronRight, Flame, Play } from "lucide-react";
+import { sessionPhoto } from "@shared/player";
 import type { SessionPackage } from "@shared/types";
-import { FearlessWordmark } from "../components/icons/CustomIcons";
 import { photo } from "../lib/onboardingOptions";
+import { AthleteHeader } from "./AthleteHeader";
 import { loadPlan } from "./plan";
 import { useSession } from "./session";
 import {
@@ -17,6 +17,7 @@ import {
 interface LiveHQScreenProps {
   onStartSession: (session: SessionPackage) => void;
   onOpenTab: (tab: "training" | "progress" | "more") => void;
+  onOpenProgramme: (slug: string) => void;
 }
 
 function greeting(now = new Date()) {
@@ -59,10 +60,9 @@ export function PendingNote({ pending }: { pending: number }) {
   );
 }
 
-export function LiveHQScreen({ onStartSession, onOpenTab }: LiveHQScreenProps) {
+export function LiveHQScreen({ onStartSession, onOpenTab, onOpenProgramme }: LiveHQScreenProps) {
   const { user } = useSession();
   const { progress, library, error, pending, reload } = useAthleteData();
-  const [showNotifications, setShowNotifications] = useState(false);
   const plan = user ? loadPlan(user.id) : null;
 
   if (!progress || !library) {
@@ -70,7 +70,7 @@ export function LiveHQScreen({ onStartSession, onOpenTab }: LiveHQScreenProps) {
   }
 
   const firstName = progress.athleteName.trim().split(/\s+/)[0] || "Player";
-  const views = programmeViews(library, progress);
+  const views = programmeViews(library);
   const programme = currentProgramme(views, plan);
   const today = programme ? nextSession(programme, progress) : null;
   const fallback = library.sessions.find((session) => !session.comingSoon);
@@ -80,28 +80,7 @@ export function LiveHQScreen({ onStartSession, onOpenTab }: LiveHQScreenProps) {
   return (
     <div className="screen hq2-screen">
       <div className="hq2-glow" aria-hidden="true" />
-      <header className="hq2-header">
-        <FearlessWordmark />
-        <div className="hq2-header-actions">
-          <button
-            type="button"
-            className="hq2-icon-button"
-            aria-label="Notifications"
-            aria-expanded={showNotifications}
-            onClick={() => setShowNotifications((open) => !open)}
-          >
-            <Bell size={20} />
-          </button>
-          <button type="button" className="hq2-avatar" aria-label="Your account" onClick={() => onOpenTab("more")}>
-            {firstName.charAt(0).toUpperCase()}
-          </button>
-          {showNotifications && (
-            <div className="hq2-popover" role="status">
-              You're all caught up.
-            </div>
-          )}
-        </div>
-      </header>
+      <AthleteHeader name={firstName} onOpenAccount={() => onOpenTab("more")} />
 
       <section className="hq2-hello">
         <p>{greeting()}, {firstName}.</p>
@@ -146,16 +125,9 @@ export function LiveHQScreen({ onStartSession, onOpenTab }: LiveHQScreenProps) {
 
       {todaySession ? (
         <section className="hq2-card hq2-today" aria-label="Today's training">
-          <img src={photo("headphones")} alt="" />
+          <img src={photo(sessionPhoto(todaySession))} alt="" />
           <div className="hq2-today-body">
-            <div className="hq2-row">
-              <span className="hq2-eyebrow">TODAY'S TRAINING</span>
-              {programme && today && (
-                <span className="hq2-count">
-                  {today.index + 1}/{programme.sessions.length}
-                </span>
-              )}
-            </div>
+            <span className="hq2-eyebrow">TODAY'S TRAINING</span>
             <h2>{todaySession.title}</h2>
             <div className="hq2-row hq2-today-foot">
               <span className="hq2-meta">
@@ -175,37 +147,26 @@ export function LiveHQScreen({ onStartSession, onOpenTab }: LiveHQScreenProps) {
         </section>
       )}
 
-      {views.length > 0 && (
-        <section className="hq2-card hq2-programmes" aria-label="Your programmes">
+      {programme && (
+        <section className="hq2-card hq2-programmes" aria-label="Your programme">
           <div className="hq2-row">
-            <span className="hq2-eyebrow">YOUR PROGRAMMES</span>
+            <span className="hq2-eyebrow">YOUR PROGRAMME</span>
             <button type="button" className="hq2-link" onClick={() => onOpenTab("training")}>
-              See all →
+              Change →
             </button>
           </div>
-          {(programme ? [programme, ...views.filter((view) => view !== programme)] : views).slice(0, 2).map((view) => (
-            <button
-              key={view.programme.slug}
-              type="button"
-              className="hq2-programme"
-              onClick={() => onStartSession(nextSession(view, progress).session)}
-              aria-label={`${view.programme.title}, ${view.completed} of ${view.sessions.length} sessions done. Play the next session`}
-            >
-              <span className="hq2-programme-photo">
-                <img src={programmePhoto(view.programme.slug)} alt="" />
-                <strong>{view.programme.title}</strong>
-              </span>
-              <span className="hq2-programme-text">
-                <small>{view.sessions.map((session) => session.title).join(" · ")}</small>
-                <span className="hq2-bar" aria-hidden="true">
-                  <span style={{ width: `${(view.completed / view.sessions.length) * 100}%` }} />
-                </span>
-                <small>
-                  {view.completed} of {view.sessions.length} sessions
-                </small>
-              </span>
-            </button>
-          ))}
+          <button
+            type="button"
+            className="hq2-programme"
+            onClick={() => onOpenProgramme(programme.programme.slug)}
+            aria-label={`${programme.programme.title}. Open the programme`}
+          >
+            <span className="hq2-programme-photo">
+              <img src={programmePhoto(programme.programme.slug)} alt="" />
+              <strong>{programme.programme.title}</strong>
+            </span>
+            {programme.programme.tagline && <span className="hq2-programme-tagline">{programme.programme.tagline}</span>}
+          </button>
         </section>
       )}
     </div>

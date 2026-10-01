@@ -22,3 +22,9 @@ export function savePlan(userId: string, plan: OnboardingPlan) {
     // Storage unavailable: onboarding will show again next visit.
   }
 }
+
+/** Records the programme the player chose on the Training tab. */
+export function chooseProgramme(userId: string, programme: string) {
+  const plan = loadPlan(userId);
+  if (plan) savePlan(userId, { ...plan, programme });
+}

@@ -1,5 +1,5 @@
 import { Image, Text, View } from "react-native";
-import { lastSevenDayLabels, programmeViews } from "../../../shared/training";
+import { lastSevenDayLabels } from "../../../shared/training";
 import { useAthleteData } from "../../src/lib/useAthleteData";
 import { AthleteRouteGuard } from "../../src/session";
 import { LoadingRow, Screen, StatusCard, colors } from "../../src/ui";
@@ -15,8 +15,7 @@ const plural = (count: number, one: string, many: string) => (count === 1 ? one 
  * come first. Streaks stay, but further down – they're a habit, not the goal.
  */
 function ProgressContent() {
-  const { library, progress, pendingCompletions, loading, error } = useAthleteData();
-  const views = library && progress ? programmeViews(library, progress) : [];
+  const { progress, pendingCompletions, loading, error } = useAthleteData();
   const dayLabels = lastSevenDayLabels();
   const total = progress?.totalCompletions ?? 0;
   const weeks = progress?.consecutiveWeeks ?? 0;
@@ -85,24 +84,6 @@ function ProgressContent() {
             )}
           </View>
 
-          {views.length > 0 ? (
-            <View style={hq.card}>
-              <Text style={hq.eyebrow}>PROGRAMMES</Text>
-              {views.map((view) => (
-                <View key={view.programme.slug} style={styles.area}>
-                  <View style={hq.row}>
-                    <Text style={styles.areaTitle}>{view.programme.title}</Text>
-                    <Text style={hq.meta}>
-                      {view.completed}/{view.sessions.length}
-                    </Text>
-                  </View>
-                  <View style={hq.barTrack}>
-                    <View style={[hq.barFill, { width: `${(view.completed / view.sessions.length) * 100}%` }]} />
-                  </View>
-                </View>
-              ))}
-            </View>
-          ) : null}
 
           <View style={[hq.card, styles.habit]}>
             <Text style={hq.eyebrow}>TRAINING HABIT</Text>

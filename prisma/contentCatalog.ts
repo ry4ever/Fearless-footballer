@@ -23,6 +23,8 @@ export interface CatalogSession {
   audio: Record<AudioMode, Record<MusicVariant, string>> | null;
   /** Source file name of the "Why this works?" video, in the audio folder. */
   video?: string;
+  /** One line under the title in programme lists. */
+  tagline: string | null;
   /** Short labels shown under the title in the player. */
   tags: string[];
   descriptionMarkdown: string | null;
@@ -31,6 +33,8 @@ export interface CatalogSession {
 export interface CatalogProgramme {
   slug: string;
   title: string;
+  /** One line on the programme card. */
+  tagline: string | null;
   description: string;
   sortOrder: number;
   sessions: string[];
@@ -76,6 +80,7 @@ export function readCatalog(root: string): { sessions: CatalogSession[]; program
       audioSourceFolder: meta.audioSourceFolder,
       audio: meta.audio ?? null,
       video: typeof meta.video === "string" ? meta.video : undefined,
+      tagline: typeof meta.tagline === "string" ? meta.tagline : null,
       tags: stringList(meta.tags),
       descriptionMarkdown: existsSync(descriptionPath) ? playerFacing(readFileSync(descriptionPath, "utf8")) : null,
     });
@@ -89,6 +94,7 @@ export function readCatalog(root: string): { sessions: CatalogSession[]; program
         .map((programme) => ({
           slug: programme.slug,
           title: programme.title,
+          tagline: typeof programme.tagline === "string" ? programme.tagline : null,
           description: programme.description ?? "",
           sortOrder: programme.sortOrder ?? 1000,
           sessions: programme.sessions ?? [],

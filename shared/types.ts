@@ -105,6 +105,8 @@ export interface SessionPackage {
   whyVideoUrl?: string;
   /** Length of that video in seconds. */
   whyVideoDurationSeconds?: number;
+  /** One line under the title in programme lists. */
+  tagline?: string;
   /** Short labels under the title, e.g. ["Confidence", "Match Preparation"]. */
   tags?: string[];
   phases: SessionPhase[];
@@ -121,6 +123,8 @@ export interface SessionAudioVariant {
 export interface ProgrammeSummary {
   slug: string;
   title: string;
+  /** One line on the programme card. */
+  tagline?: string;
   description: string;
   /** Session ids in programme order. */
   sessionIds: string[];

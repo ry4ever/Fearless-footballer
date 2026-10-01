@@ -10,6 +10,7 @@ import { LiveNav, type LiveTab } from "./LiveNav";
 import { LiveParentDashboard } from "./LiveParentDashboard";
 import { LivePlayerScreen, type CompletionOutcome } from "./LivePlayerScreen";
 import { LiveProfileScreen } from "./LiveProfileScreen";
+import { LiveProgrammeScreen } from "./LiveProgrammeScreen";
 import { LiveProgressScreen } from "./LiveProgressScreen";
 import { LiveTrainingScreen } from "./LiveTrainingScreen";
 import { loadPlan, savePlan } from "./plan";
@@ -20,7 +21,9 @@ import "./athlete.css";
 type AthleteView =
   | { name: "main"; tab: LiveTab }
   | { name: "onboarding" }
-  | { name: "player"; session: SessionPackage }
+  | { name: "programme"; slug: string }
+  /** `back` is where the player's back button returns to. */
+  | { name: "player"; session: SessionPackage; back: AthleteView }
   | { name: "complete"; outcome: CompletionOutcome };
 
 function Loading() {
@@ -56,19 +59,34 @@ function AthleteApp() {
       return (
         <LivePlayerScreen
           session={view.session}
-          onBack={toHQ}
+          onBack={() => setView(view.back)}
           onComplete={(outcome) => setView({ name: "complete", outcome })}
         />
       );
     case "complete":
       return <LiveCompleteScreen outcome={view.outcome} onBackToHQ={toHQ} />;
-    case "main": {
-      const start = (session: SessionPackage) => setView({ name: "player", session });
-      const openTab = (tab: LiveTab) => setView({ name: "main", tab });
+    case "programme":
       return (
         <>
-          {view.tab === "home" && <LiveHQScreen onStartSession={start} onOpenTab={openTab} />}
-          {view.tab === "training" && <LiveTrainingScreen onStartSession={start} />}
+          <LiveProgrammeScreen
+            slug={view.slug}
+            onBack={() => setView({ name: "main", tab: "training" })}
+            onStartSession={(session) => setView({ name: "player", session, back: view })}
+            onChosen={toHQ}
+          />
+          <LiveNav active="training" onSelect={(tab) => setView({ name: "main", tab })} />
+        </>
+      );
+    case "main": {
+      const start = (session: SessionPackage) => setView({ name: "player", session, back: view });
+      const openTab = (tab: LiveTab) => setView({ name: "main", tab });
+      const openProgramme = (slug: string) => setView({ name: "programme", slug });
+      return (
+        <>
+          {view.tab === "home" && <LiveHQScreen onStartSession={start} onOpenTab={openTab} onOpenProgramme={openProgramme} />}
+          {view.tab === "training" && (
+            <LiveTrainingScreen onStartSession={start} onOpenProgramme={openProgramme} onOpenAccount={() => openTab("more")} />
+          )}
           {view.tab === "progress" && <LiveProgressScreen />}
           {view.tab === "more" && <LiveProfileScreen onEditPlan={() => setView({ name: "onboarding" })} />}
           <LiveNav active={view.tab} onSelect={openTab} />

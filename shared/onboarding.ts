@@ -207,6 +207,8 @@ export interface OnboardingPlan {
   skills: string[];
   goal: string;
   matchday: string;
+  /** Programme slug chosen on the Training tab; otherwise one is picked from the position. */
+  programme?: string;
 }
 
 export function skillLabel(positionId: string, skillId: string): string {

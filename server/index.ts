@@ -412,6 +412,7 @@ function toSessionPackage(session: SessionWithPackageParts): SessionPackage {
     audio: session.comingSoon ? undefined : audio,
     whyVideoUrl: session.videoUrl ? mediaUrl(session.videoUrl) : undefined,
     whyVideoDurationSeconds: session.videoUrl ? (session.videoDurationSeconds ?? undefined) : undefined,
+    tagline: session.tagline ?? undefined,
     tags: session.tags.length ? session.tags : undefined,
   };
 }
@@ -1205,6 +1206,7 @@ async function getSessionLibraryHandler(req: Request, res: Response) {
       .map((programme) => ({
       slug: programme.slug,
       title: programme.title,
+      tagline: programme.tagline ?? undefined,
       description: programme.description,
       sessionIds: programme.sessions.map((member) => member.sessionId),
     })),

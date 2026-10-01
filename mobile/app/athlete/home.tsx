@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Image, Pressable, Text, View } from "react-native";
 import { Redirect, useRouter } from "expo-router";
 import { programmePhoto } from "../../../shared/onboarding";
+import { sessionPhoto } from "../../../shared/player";
 import {
   currentProgramme,
   firstName,
@@ -28,14 +29,13 @@ function AthleteHomeContent() {
   if (plan === null) return <Redirect href="/athlete/onboarding" />;
 
   const name = firstName(progress?.athleteName ?? account?.displayName);
-  const views = library && progress ? programmeViews(library, progress) : [];
+  const views = library ? programmeViews(library) : [];
   const programme = currentProgramme(views, plan ?? null);
   const today = programme && progress ? nextSession(programme, progress) : null;
   const todaySession = today?.session ?? library?.sessions.find((item) => !item.comingSoon);
   const dayLabels = lastSevenDayLabels();
   // A session opens straight into the player; the version is chosen there.
   const openSession = (item: SessionPackage) => router.push(`/session/${item.id}`);
-  const ordered = programme ? [programme, ...views.filter((view) => view !== programme)] : views;
 
   return (
     <Screen testID="athlete-home-screen" footer={<TabBar active="home" />}>
@@ -124,16 +124,11 @@ function AthleteHomeContent() {
 
       {todaySession ? (
         <View style={[hq.card, styles.today]} testID="todays-training">
-          <Image source={photos.headphones} style={styles.todayPhoto} resizeMode="cover" />
+          <Image source={photos[sessionPhoto(todaySession)]} style={styles.todayPhoto} resizeMode="cover" />
           <View style={styles.todayShade} />
           <View style={styles.todayBody}>
             <View style={hq.row}>
               <Text style={hq.eyebrow}>TODAY'S TRAINING</Text>
-              {programme && today ? (
-                <Text style={styles.count}>
-                  {today.index + 1}/{programme.sessions.length}
-                </Text>
-              ) : null}
             </View>
             <Text style={styles.todayTitle}>{todaySession.title}</Text>
             <View style={[hq.row, styles.todayFoot]}>
@@ -158,41 +153,28 @@ function AthleteHomeContent() {
         </StatusCard>
       ) : null}
 
-      {ordered.length > 0 && progress ? (
-        <View style={hq.card} testID="your-programmes">
+      {programme ? (
+        <View style={hq.card} testID="your-programme">
           <View style={hq.row}>
-            <Text style={hq.eyebrow}>YOUR PROGRAMMES</Text>
+            <Text style={hq.eyebrow}>YOUR PROGRAMME</Text>
             <Pressable accessibilityRole="button" onPress={() => router.replace("/athlete/training")} hitSlop={8}>
-              <Text style={hq.link}>See all →</Text>
+              <Text style={hq.link}>Change →</Text>
             </Pressable>
           </View>
-          {ordered.slice(0, 2).map((view) => (
-            <Pressable
-              key={view.programme.slug}
-              accessibilityRole="button"
-              accessibilityLabel={`${view.programme.title}, ${view.completed} of ${view.sessions.length} sessions done. Play the next session`}
-              onPress={() => openSession(nextSession(view, progress).session)}
-              style={({ pressed }) => [styles.programme, pressed && hq.pressed]}
-              testID={`programme-${view.programme.slug}`}
-            >
-              <View style={hq.banner}>
-                <Image source={photos[programmePhoto(view.programme.slug)]} style={hq.bannerPhoto} resizeMode="cover" />
-                <View style={hq.bannerShade} />
-                <Text style={hq.bannerTitle}>{view.programme.title}</Text>
-              </View>
-              <View style={styles.programmeText}>
-                <Text style={hq.small} numberOfLines={1}>
-                  {view.sessions.map((item) => item.title).join(" · ")}
-                </Text>
-                <View style={hq.barTrack}>
-                  <View style={[hq.barFill, { width: `${(view.completed / view.sessions.length) * 100}%` }]} />
-                </View>
-                <Text style={hq.small}>
-                  {view.completed} of {view.sessions.length} sessions
-                </Text>
-              </View>
-            </Pressable>
-          ))}
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={`${programme.programme.title}. Open the programme`}
+            onPress={() => router.push(`/athlete/programme/${programme.programme.slug}`)}
+            style={({ pressed }) => [styles.programme, pressed && hq.pressed]}
+            testID={`programme-${programme.programme.slug}`}
+          >
+            <View style={hq.banner}>
+              <Image source={photos[programmePhoto(programme.programme.slug)]} style={hq.bannerPhoto} resizeMode="cover" />
+              <View style={hq.bannerShade} />
+              <Text style={hq.bannerTitle}>{programme.programme.title}</Text>
+            </View>
+            {programme.programme.tagline ? <Text style={styles.programmeTagline}>{programme.programme.tagline}</Text> : null}
+          </Pressable>
         </View>
       ) : null}
     </Screen>
@@ -243,20 +225,10 @@ const styles = {
   todayBody: { flex: 1, minHeight: 190, padding: 16 },
   todayTitle: { fontFamily: fonts.w900, color: colors.white, fontSize: 23, marginTop: 8, maxWidth: "75%" },
   todayFoot: { marginTop: "auto", paddingTop: 16 },
-  count: {
-    fontFamily: fonts.w900,
-    color: colors.cyan,
-    fontSize: 11,
-    paddingHorizontal: 9,
-    paddingVertical: 3,
-    borderRadius: 99,
-    overflow: "hidden",
-    backgroundColor: "rgba(105, 224, 250, 0.14)",
-  },
   play: { width: 56, height: 56, borderRadius: 28, alignItems: "center", justifyContent: "center", backgroundColor: colors.cyanStrong },
   playGlyph: { fontFamily: fonts.w400, color: "#041126", fontSize: 20, marginLeft: 3 },
   programme: { marginTop: 12 },
-  programmeText: { marginTop: 8 },
+  programmeTagline: { fontFamily: fonts.w400, color: "#B8C9E4", fontSize: 13.5, lineHeight: 19, marginTop: 10 },
 } as const;
 
 export default function AthleteHomeScreen() {

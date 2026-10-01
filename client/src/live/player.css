@@ -214,6 +214,33 @@
   cursor: pointer;
 }
 
+/* Reflection notepad */
+.modal-sheet h3 { font-weight: 800; }
+.rf-notepad { display: grid; gap: 8px; margin-top: 16px; }
+.rf-notepad-label { display: inline-flex; align-items: center; gap: 8px; color: var(--white); font-size: 15px; font-weight: 700; }
+.rf-notepad-label svg { color: var(--cyan); }
+.rf-notepad textarea {
+  width: 100%;
+  min-height: 140px;
+  padding: 14px;
+  border: 1px solid rgba(105, 224, 250, 0.3);
+  border-radius: 14px;
+  color: var(--white);
+  background:
+    repeating-linear-gradient(180deg, transparent 0, transparent 27px, rgba(143, 176, 220, 0.12) 27px, rgba(143, 176, 220, 0.12) 28px),
+    rgba(5, 10, 25, 0.6);
+  background-attachment: local;
+  /* Lines up the rules with the text baseline (28px lines, 14px top padding). */
+  background-position: 0 10px;
+  font: inherit;
+  font-size: 15px;
+  line-height: 28px;
+  resize: vertical;
+}
+.rf-notepad textarea:focus { outline: none; border-color: var(--cyan); box-shadow: 0 0 0 3px rgba(105, 224, 250, 0.18); }
+.rf-notepad textarea::placeholder { color: #7a91b8; }
+.rf-notepad small { justify-self: end; color: #7a91b8; font-size: 12px; }
+
 @media (prefers-reduced-motion: reduce) {
   .ps-video,
   .ps-style,

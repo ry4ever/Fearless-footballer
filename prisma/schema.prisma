@@ -81,7 +81,8 @@ model MetricSnapshot {
 model Reflection {
   id               String            @id @default(cuid())
   completionId     String            @unique
-  feeling          ReflectionFeeling
+  /// Optional: an athlete can leave just their notes.
+  feeling          ReflectionFeeling?
   athleteNote      String?
   createdAt        DateTime          @default(now())
   sessionCompleted SessionCompleted  @relation(fields: [completionId], references: [id], onDelete: Cascade)

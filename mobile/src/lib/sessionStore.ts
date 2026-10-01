@@ -264,13 +264,11 @@ function parsePlaybackProgress(value: unknown): SessionPlaybackProgress | undefi
 }
 
 function parseReflection(value: unknown) {
-  if (!isRecord(value) || !isReflectionFeeling(value.feeling)) return undefined;
-  return {
-    feeling: value.feeling,
-    ...(typeof value.note === "string" && value.note.trim()
-      ? { note: value.note.trim() }
-      : {}),
-  };
+  if (!isRecord(value)) return undefined;
+  const feeling = isReflectionFeeling(value.feeling) ? value.feeling : undefined;
+  const note = typeof value.note === "string" && value.note.trim() ? value.note.trim() : undefined;
+  if (!feeling && !note) return undefined;
+  return { ...(feeling ? { feeling } : {}), ...(note ? { note } : {}) };
 }
 
 function parseCompletion(value: unknown): SessionCompletion | undefined {

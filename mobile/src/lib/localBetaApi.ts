@@ -258,12 +258,12 @@ function requireAthleteAccountForSync(state: LoadedSessionState) {
 
 function validateReflection(request: SessionCompletionRequest) {
   if (!request.reflection) return;
-  if (
-    request.reflection.feeling !== "clearer" &&
-    request.reflection.feeling !== "steadier" &&
-    request.reflection.feeling !== "more_ready"
-  ) {
-    throw new LocalApiError("Choose how you feel after the rehearsal.", 422);
+  const { feeling, note } = request.reflection;
+  if (feeling !== undefined && feeling !== "clearer" && feeling !== "steadier" && feeling !== "more_ready") {
+    throw new LocalApiError("Choose how you feel after the session.", 422);
+  }
+  if (feeling === undefined && !note?.trim()) {
+    throw new LocalApiError("Add how you feel or a note.", 422);
   }
   if (
     request.reflection.note !== undefined &&

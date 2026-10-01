@@ -198,8 +198,9 @@ export interface PairingLink {
   revokedAt?: string;
 }
 
+/** After a session: how it felt and/or the athlete's own notes (at least one). */
 export interface Reflection {
-  feeling: ReflectionFeeling;
+  feeling?: ReflectionFeeling;
   note?: string;
 }
 

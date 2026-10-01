@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { View } from "react-native";
+import { Text, TextInput, View } from "react-native";
 import {
   router,
   useLocalSearchParams,
@@ -17,7 +17,6 @@ import {
   Brand,
   Button,
   ChoiceCard,
-  Field,
   PageTitle,
   PrivacyNotice,
   Screen,
@@ -31,6 +30,7 @@ import type {
   SessionPackage,
 } from "../../../../shared/types";
 import { progressKey, variantFromParams } from "../../../src/lib/sessionVersions";
+import { fonts } from "../../../src/ui/fonts";
 import {
   formatClock,
   isCompletionEligible,
@@ -135,7 +135,7 @@ function CompletionContent() {
   const eligible = Boolean(session && isCompletionEligible(playedSeconds, targetSeconds));
 
   async function submitCompletion() {
-    if (!session || !feeling || !eligible) return;
+    if (!session || !eligible) return;
     setSubmitting(true);
     setError("");
     setSavedOffline(false);
@@ -149,10 +149,10 @@ function CompletionContent() {
         ...(variant ? { withMusic: variant.withMusic } : {}),
         completionDurationSeconds: Math.min(Math.round(playedSeconds), targetSeconds),
         completedAt: new Date().toISOString(),
-        reflection: {
-          feeling,
-          ...(note.trim() ? { note: note.trim() } : {}),
-        },
+        // Feeling and notes are both optional; send whichever they gave.
+        ...(feeling || note.trim()
+          ? { reflection: { ...(feeling ? { feeling } : {}), ...(note.trim() ? { note: note.trim() } : {}) } }
+          : {}),
         idempotencyKey,
       };
       const response = await api.completeSession(session.id, request);
@@ -237,9 +237,9 @@ function CompletionContent() {
       ) : (
         <View>
           <PageTitle
-            eyebrow="Private check-in"
-            title="How do you feel now?"
-            copy="Choose one feeling. A private note is optional and never appears in the caregiver view."
+            eyebrow="Reflect"
+            title="How did that feel?"
+            copy="Pick a feeling, write down your thoughts, or both. Your reflections are private to you."
           />
           {!eligible ? (
             <StatusCard tone="warning" title="Keep playing">
@@ -258,27 +258,33 @@ function CompletionContent() {
                 title={choice.label}
                 description={choice.description}
                 selected={feeling === choice.value}
-                onPress={() => setFeeling(choice.value)}
+                onPress={() => setFeeling(feeling === choice.value ? null : choice.value)}
                 accessibilityLabel={`Choose ${choice.label}`}
                 testID={`feeling-${choice.value}`}
               />
             ))}
           </View>
-          <Field
-            label="Private note (optional)"
-            value={note}
-            onChangeText={setNote}
-            multiline
-            maxLength={1000}
-            accessibilityLabel="Private reflection note"
-            placeholder="What do you want to remember for the next play?"
-            hint="Only you can see this note in the local beta."
-          />
+          <View style={styles.notepad}>
+            <Text style={styles.notepadLabel}>✎  Your reflection</Text>
+            <TextInput
+              value={note}
+              onChangeText={setNote}
+              multiline
+              maxLength={1000}
+              accessibilityLabel="Your reflection"
+              placeholder="What did you see? What felt different? What will you take into your next game?"
+              placeholderTextColor="#7A91B8"
+              textAlignVertical="top"
+              style={styles.notepadInput}
+              testID="reflection-notepad"
+            />
+            <Text style={styles.notepadCount}>{note.length}/1000</Text>
+          </View>
           <Button
-            label={submitting ? "Saving completion…" : "Save completion"}
+            label={submitting ? "Saving…" : "Save"}
             onPress={submitCompletion}
             loading={submitting}
-            disabled={!eligible || !feeling || submitting}
+            disabled={!eligible || submitting}
             accessibilityLabel="Save session completion"
             testID="save-completion-button"
           />
@@ -298,5 +304,20 @@ export default function CompletionScreen() {
 }
 
 const styles = {
+  notepad: { marginBottom: 16, gap: 8 },
+  notepadLabel: { fontFamily: fonts.w700, color: colors.white, fontSize: 15 },
+  notepadInput: {
+    minHeight: 150,
+    padding: 14,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: "rgba(105, 224, 250, 0.3)",
+    backgroundColor: "rgba(5, 10, 25, 0.6)",
+    color: colors.white,
+    fontFamily: fonts.w400,
+    fontSize: 15,
+    lineHeight: 24,
+  },
+  notepadCount: { alignSelf: "flex-end", fontFamily: fonts.w400, color: "#7A91B8", fontSize: 12 },
   choices: { marginBottom: 16 },
 } as const;

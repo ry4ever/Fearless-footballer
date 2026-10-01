@@ -141,9 +141,10 @@ const completionSchema = z.object({
   completedAt: z.string().datetime(),
   reflection: z
     .object({
-      feeling: z.enum(["clearer", "steadier", "more_ready"]),
-      note: z.string().max(1000).optional(),
+      feeling: z.enum(["clearer", "steadier", "more_ready"]).optional(),
+      note: z.string().trim().max(1000).optional(),
     })
+    .refine((reflection) => reflection.feeling || reflection.note, "A reflection needs a feeling or a note.")
     .optional(),
   idempotencyKey: z.string().trim().min(1),
 });
@@ -1386,8 +1387,10 @@ async function completeSessionHandler(req: Request, res: Response) {
                       ? "CLEARER"
                       : request.reflection.feeling === "steadier"
                         ? "STEADIER"
-                        : "MORE_READY",
-                  athleteNote: request.reflection.note ?? undefined,
+                        : request.reflection.feeling === "more_ready"
+                          ? "MORE_READY"
+                          : null,
+                  athleteNote: request.reflection.note || undefined,
                 },
               }
             : undefined,

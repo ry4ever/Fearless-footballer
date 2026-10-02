@@ -166,6 +166,18 @@ export interface CaregiverCoachLink {
   requestedAt: string;
 }
 
+/** A coach invite, as Mark sees it. The code itself is only shown once, when created. */
+export interface CoachInviteSummary {
+  id: string;
+  /** Who it's for, e.g. the coach's name. */
+  note?: string;
+  createdAt: string;
+  expiresAt: string;
+  status: "open" | "used" | "expired";
+  usedAt?: string;
+  usedByName?: string;
+}
+
 /** One athlete in a coach's squad list. */
 export interface CoachSquadAthlete {
   linkId: string;
@@ -181,6 +193,8 @@ export interface CoachSquadAthlete {
 export interface CoachSquadResponse {
   coachName: string;
   squadCode: string;
+  /** Mark (listed in COACH_ADMIN_EMAILS) can invite other coaches. */
+  canInviteCoaches: boolean;
   athletes: CoachSquadAthlete[];
 }
 

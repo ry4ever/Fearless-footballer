@@ -19,7 +19,7 @@ import {
   hashResetToken,
 } from "./lib/pii";
 import { sanitizeAuditDetails } from "./lib/audit";
-import { createCoachInvite, normaliseCode, uniqueSquadCode } from "./lib/coachInvites";
+import { coachAdminEmailHashes, createCoachInvite, normaliseCode, uniqueSquadCode } from "./lib/coachInvites";
 import { monitoring } from "./lib/monitoring";
 import { generateSignedMediaUrl } from "./lib/cdn";
 import { computeAthleteMetrics, consecutiveTrainingWeeks, localDayKey, type CompletionRecord } from "./lib/metrics";
@@ -30,6 +30,7 @@ import {
   type BetaUserRole,
   type CaregiverDashboardPayload,
   type CoachAthleteDetail,
+  type CoachInviteSummary,
   type CoachSquadResponse,
   type OfflineQueueStatus,
   type PairingLink,
@@ -477,7 +478,8 @@ async function registerAccountHandler(req: Request, res: Response) {
   }
 
   let invite: { id: string } | null = null;
-  if (request.role === "coach") {
+  const isCoachAdmin = request.role === "coach" && coachAdminEmailHashes(hashEmail).has(emailHash);
+  if (request.role === "coach" && !isCoachAdmin) {
     invite = request.inviteCode
       ? await prisma.coachInvite.findFirst({
           where: { codeHash: hashPairingCode(normaliseCode(request.inviteCode)), usedAt: null, expiresAt: { gt: new Date() } },
@@ -516,15 +518,17 @@ async function registerAccountHandler(req: Request, res: Response) {
       },
     });
   }
-  if (request.role === "coach" && invite) {
+  if (request.role === "coach") {
     const usedInvite = invite;
     await prisma.$transaction(async (tx) => {
-      // Single use: a second sign-up racing on the same code fails here.
-      const claimed = await tx.coachInvite.updateMany({
-        where: { id: usedInvite.id, usedAt: null },
-        data: { usedAt: new Date(), usedById: user.id },
-      });
-      if (claimed.count !== 1) throw new Error("Coach invite already used");
+      if (usedInvite) {
+        // Single use: a second sign-up racing on the same code fails here.
+        const claimed = await tx.coachInvite.updateMany({
+          where: { id: usedInvite.id, usedAt: null },
+          data: { usedAt: new Date(), usedById: user.id },
+        });
+        if (claimed.count !== 1) throw new Error("Coach invite already used");
+      }
       await tx.coachProfile.create({ data: { userId: user.id, squadCode: await uniqueSquadCode(tx) } });
     }).catch(async (error) => {
       await prisma.user.delete({ where: { id: user.id } });
@@ -2387,6 +2391,78 @@ async function caregiverRemoveCoachHandler(req: Request, res: Response) {
   res.status(204).end();
 }
 
+async function isCoachAdmin(userId: string): Promise<boolean> {
+  const admins = coachAdminEmailHashes(hashEmail);
+  if (admins.size === 0) return false;
+  const user = await prisma.user.findUnique({ where: { id: userId }, select: { emailHash: true, role: true } });
+  return user?.role === "COACH" && admins.has(user.emailHash);
+}
+
+/** Only coaches listed in COACH_ADMIN_EMAILS (Mark) can manage invites. */
+async function requireCoachAdmin(req: Request, res: Response): Promise<boolean> {
+  if (await isCoachAdmin(req.auth!.userId)) return true;
+  res.status(403).json({ error: "Only Mark can invite coaches" });
+  return false;
+}
+
+/** Coach admin: invites they've made, newest first, with who used each. */
+async function listCoachInvitesHandler(req: Request, res: Response) {
+  if (!(await requireCoachAdmin(req, res))) return;
+  const invites = await prisma.coachInvite.findMany({ orderBy: { createdAt: "desc" }, take: 50 });
+  const usedBy = await prisma.user.findMany({
+    where: { id: { in: invites.map((invite) => invite.usedById).filter((id): id is string => Boolean(id)) } },
+    select: { id: true, fullName: true },
+  });
+  // A name that can't be decrypted (e.g. written under another key) is
+  // skipped rather than failing the whole list.
+  const names = new Map<string, string>();
+  for (const user of usedBy) {
+    try {
+      names.set(user.id, decryptPII(user.fullName));
+    } catch {
+      // Leave this invite without a name.
+    }
+  }
+  const now = new Date();
+  const body: { invites: CoachInviteSummary[] } = {
+    invites: invites.map((invite) => ({
+      id: invite.id,
+      note: invite.note ?? undefined,
+      createdAt: invite.createdAt.toISOString(),
+      expiresAt: invite.expiresAt.toISOString(),
+      status: invite.usedAt ? "used" : invite.expiresAt <= now ? "expired" : "open",
+      ...(invite.usedAt ? { usedAt: invite.usedAt.toISOString() } : {}),
+      ...(invite.usedById && names.has(invite.usedById) ? { usedByName: names.get(invite.usedById) } : {}),
+    })),
+  };
+  res.json(body);
+}
+
+/** Coach admin: create an invite. The code is only returned this once. */
+async function createCoachInviteHandler(req: Request, res: Response) {
+  if (!(await requireCoachAdmin(req, res))) return;
+  const parsed = coachInviteSchema.safeParse(req.body ?? {});
+  if (!parsed.success) {
+    res.status(422).json({ error: "Invalid invite request" });
+    return;
+  }
+  const invite = await createCoachInvite(prisma, { createdById: req.auth!.userId, ...parsed.data });
+  await audit(req, "COACH_INVITE", "COACH_INVITE", invite.code.slice(0, 6));
+  res.status(201).json({ inviteCode: invite.code, expiresAt: invite.expiresAt.toISOString() });
+}
+
+/** Coach admin: cancel an invite nobody has used yet. */
+async function cancelCoachInviteHandler(req: Request, res: Response) {
+  if (!(await requireCoachAdmin(req, res))) return;
+  const result = await prisma.coachInvite.deleteMany({ where: { id: String(req.params.inviteId), usedAt: null } });
+  if (result.count === 0) {
+    res.status(404).json({ error: "Invite not found or already used" });
+    return;
+  }
+  await audit(req, "COACH_INVITE_CANCEL", "COACH_INVITE", String(req.params.inviteId));
+  res.status(204).end();
+}
+
 async function coachProfileFor(userId: string) {
   return prisma.coachProfile.findUnique({ where: { userId }, include: { user: { select: { fullName: true } } } });
 }
@@ -2414,6 +2490,7 @@ async function getCoachSquadHandler(req: Request, res: Response) {
   const body: CoachSquadResponse = {
     coachName: decryptPII(coach.user.fullName),
     squadCode: coach.squadCode,
+    canInviteCoaches: await isCoachAdmin(req.auth!.userId),
     athletes: links.map((link) => {
       const row = link.status === "ACTIVE" ? statsByUser.get(link.athlete.user.id) : undefined;
       return {
@@ -2617,6 +2694,9 @@ app.get("/coach/athletes/:linkId", wrap(authenticate), requireRole("coach"), wra
 app.put("/coach/athletes/:linkId/plan", wrap(authenticate), requireRole("coach"), wrap(setCoachPlanHandler));
 app.delete("/coach/athletes/:linkId", wrap(authenticate), requireRole("coach"), wrap(coachRemoveAthleteHandler));
 app.post("/admin/coach-invites", wrap(authenticate), requireRole("mentor_admin"), wrap(adminCreateCoachInviteHandler));
+app.get("/coach/invites", wrap(authenticate), requireRole("coach"), wrap(listCoachInvitesHandler));
+app.post("/coach/invites", wrap(authenticate), requireRole("coach"), wrap(createCoachInviteHandler));
+app.delete("/coach/invites/:inviteId", wrap(authenticate), requireRole("coach"), wrap(cancelCoachInviteHandler));
 app.get("/athlete/queue-status", wrap(authenticate), requireRole("athlete"), wrap(getOfflineQueueStatusHandler));
 app.patch("/athlete/profile", wrap(authenticate), requireRole("athlete"), wrap(updateAthleteProfileHandler));
 

@@ -49,7 +49,7 @@ export function AuthScreen() {
           password,
           privacyAcknowledged,
           ...(role === "athlete" ? { birthDate, timezone: browserTimezone() } : {}),
-          ...(role === "coach" ? { inviteCode: inviteCode.trim() } : {}),
+          ...(role === "coach" && inviteCode.trim() ? { inviteCode: inviteCode.trim() } : {}),
         });
       } else {
         await apiClient.signIn(email.trim(), password, role);
@@ -112,10 +112,9 @@ export function AuthScreen() {
               onChange={(e) => setInviteCode(e.target.value)}
               autoComplete="off"
               autoCapitalize="characters"
-              required
               placeholder="COACH-…"
             />
-            <span className="live-hint">Coach accounts are by invitation. Mark sends you the code.</span>
+            <span className="live-hint">Coach accounts are by invitation – enter the code you were sent.</span>
           </label>
         )}
         {registering && role === "athlete" && (

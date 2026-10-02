@@ -4,6 +4,7 @@ import type { CoachAthleteDetail, CoachSquadResponse } from "@shared/types";
 import { FearlessWordmark } from "../components/icons/CustomIcons";
 import { apiClient } from "../lib/apiClient";
 import { AccountActions } from "./AccountActions";
+import { CoachInvites } from "./CoachInvites";
 import { LoadState } from "./LiveHQScreen";
 import { lastSevenDayLabels } from "./useAthleteData";
 import "./coach.css";
@@ -149,6 +150,8 @@ function CoachSquadScreen({ onOpen }: { onOpen: (linkId: string) => void }) {
           </div>
         </section>
       )}
+
+      {squad.canInviteCoaches && <CoachInvites />}
 
       <AccountActions />
     </div>

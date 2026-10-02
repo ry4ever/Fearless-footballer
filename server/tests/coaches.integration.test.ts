@@ -55,9 +55,12 @@ async function pairedAthlete(name: string) {
 }
 
 describe("Coaches", () => {
+  const adminEmail = `coach-test-coach-MarkAdmin-${stamp}@example.test`;
+
   const sessionIds: string[] = [];
 
   beforeAll(async () => {
+    process.env.COACH_ADMIN_EMAILS = ` other@example.test , ${adminEmail.toUpperCase()} `;
     await new Promise<void>((resolve) => {
       server = app.listen(0, () => {
         const addr = server.address();
@@ -172,6 +175,46 @@ describe("Coaches", () => {
       expect((await call(`/coach/athletes/${linkId}`, { token: coachToken })).status).toBe(404);
       expect((await call("/sessions", { token: athleteToken })).body.coachPlan).toBeUndefined();
       expect((await call("/athlete/coach", { token: athleteToken })).body.coach).toBeNull();
+    },
+    { timeout: 120000 },
+  );
+
+  it(
+    "Mark (COACH_ADMIN_EMAILS) signs up without an invite and manages invites; other coaches can't",
+    async () => {
+      const mark = await register("coach", "Mark Admin");
+      expect(mark.status).toBe(201);
+      const markToken = mark.body.tokens.accessToken as string;
+      expect((await call("/coach/squad", { token: markToken })).body.canInviteCoaches).toBe(true);
+
+      const created = await call("/coach/invites", { token: markToken, body: { note: "Coach Jamie" } });
+      expect(created.status).toBe(201);
+      expect(created.body.inviteCode).toMatch(/^COACH-/);
+      const listed = await call("/coach/invites", { token: markToken });
+      const open = listed.body.invites.find((invite: { note?: string }) => invite.note === "Coach Jamie");
+      expect(open).toMatchObject({ status: "open" });
+      expect(JSON.stringify(listed.body)).not.toContain(created.body.inviteCode);
+
+      // The invite works for a new coach, and then shows as used.
+      const jamie = await register("coach", "Coach Jamie", { inviteCode: created.body.inviteCode });
+      expect(jamie.status).toBe(201);
+      const after = (await call("/coach/invites", { token: markToken })).body.invites.find(
+        (invite: { id: string }) => invite.id === open.id,
+      );
+      expect(after).toMatchObject({ status: "used", usedByName: "Coach Jamie" });
+
+      // Other coaches can't see or make invites.
+      const jamieToken = jamie.body.tokens.accessToken as string;
+      expect((await call("/coach/squad", { token: jamieToken })).body.canInviteCoaches).toBe(false);
+      expect((await call("/coach/invites", { token: jamieToken })).status).toBe(403);
+      expect((await call("/coach/invites", { token: jamieToken, body: {} })).status).toBe(403);
+
+      // Unused invites can be cancelled; used ones can't.
+      const spare = await call("/coach/invites", { token: markToken, body: {} });
+      const spareId = (await call("/coach/invites", { token: markToken })).body.invites[0].id as string;
+      expect((await call(`/coach/invites/${spareId}`, { method: "DELETE", token: markToken })).status).toBe(204);
+      expect((await register("coach", "Too Late", { inviteCode: spare.body.inviteCode })).status).toBe(422);
+      expect((await call(`/coach/invites/${open.id}`, { method: "DELETE", token: markToken })).status).toBe(404);
     },
     { timeout: 120000 },
   );

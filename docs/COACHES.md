@@ -5,17 +5,24 @@ each player's training plan.
 
 ## How it works
 
-1. **Invite.** Coach accounts are invite-only. Create a single-use code:
+1. **Invite.** Coach accounts are invite-only. Mark creates invites from his
+   own coach dashboard (**Invite a coach**): each code works once, for 30
+   days, and the list shows which have been used and by whom. Unused codes
+   can be cancelled.
+
+   Mark is recognised by `COACH_ADMIN_EMAILS` (a comma-separated list, set
+   on Railway). A coach account created with one of those emails needs no
+   invite code and gets the invite panel; nobody else sees it.
+
+   There's also a command-line fallback:
 
    ```bash
    npm run coach:invite -- "Coach's name"            # valid 30 days
    npm run coach:invite -- "Coach's name" --days 7
    ```
 
-   This uses `DATABASE_URL` from `.env`. For the live app, run it with the
-   Railway database's public URL as `DATABASE_URL`. Only a hash is stored,
-   so copy the printed code straight away. (An admin can also call
-   `POST /admin/coach-invites`.)
+   It uses `DATABASE_URL` from `.env`. Only a hash of each code is stored,
+   so a code is shown once, when it's made.
 
 2. **Sign up.** The coach picks **Coach** on the sign-in page, then
    **New here? Create an account**, and enters the invite code. Each coach
@@ -46,6 +53,7 @@ and the coach's access end with it.
 | Athlete | `GET/POST /athlete/coach`, `DELETE /athlete/coach/:linkId` |
 | Parent | `GET /caregiver/coaches`, `POST /caregiver/coaches/:linkId/decision`, `DELETE /caregiver/coaches/:linkId` |
 | Coach | `GET /coach/squad`, `GET /coach/athletes/:linkId`, `PUT /coach/athletes/:linkId/plan`, `DELETE /coach/athletes/:linkId` |
+| Mark (coach admin) | `GET/POST /coach/invites`, `DELETE /coach/invites/:inviteId` |
 | Admin | `POST /admin/coach-invites` |
 
 `GET /sessions` includes `coachPlan` when the athlete has an active coach

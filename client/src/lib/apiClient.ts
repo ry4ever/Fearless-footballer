@@ -6,6 +6,7 @@ import type {
   CaregiverCoachLink,
   CaregiverDashboardPayload,
   CoachAthleteDetail,
+  CoachInviteSummary,
   CoachSquadResponse,
   CompletionSyncResponse,
   PairingApprovalResponse,
@@ -325,6 +326,19 @@ class ApiClient {
       method: "PUT",
       body: JSON.stringify({ sessionIds }),
     });
+  }
+
+  // --- Coach invites (Mark only) ---
+  public async getCoachInvites(): Promise<CoachInviteSummary[]> {
+    return (await this.request<{ invites: CoachInviteSummary[] }>("/coach/invites")).invites;
+  }
+
+  public createCoachInvite(note: string): Promise<{ inviteCode: string; expiresAt: string }> {
+    return this.request("/coach/invites", { method: "POST", body: JSON.stringify(note ? { note } : {}) });
+  }
+
+  public async cancelCoachInvite(inviteId: string): Promise<void> {
+    await this.request<void>(`/coach/invites/${encodeURIComponent(inviteId)}`, { method: "DELETE" });
   }
 
   public async removeFromSquad(linkId: string): Promise<void> {

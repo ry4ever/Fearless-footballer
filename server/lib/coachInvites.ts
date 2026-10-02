@@ -2,6 +2,21 @@ import { randomInt } from "node:crypto";
 import type { Prisma, PrismaClient } from "@prisma/client";
 import { hashPairingCode } from "./pii";
 
+/**
+ * Coaches who can invite other coaches (Mark), from COACH_ADMIN_EMAILS
+ * (comma-separated). They can also create their own coach account without an
+ * invite. Compared by email hash, since emails are stored encrypted.
+ */
+export function coachAdminEmailHashes(hash: (email: string) => string): Set<string> {
+  return new Set(
+    (process.env.COACH_ADMIN_EMAILS ?? "")
+      .split(",")
+      .map((email) => email.trim().toLowerCase())
+      .filter(Boolean)
+      .map(hash),
+  );
+}
+
 /** Codes are typed by people: ignore case and stray spaces. */
 export function normaliseCode(code: string): string {
   return code.trim().toUpperCase().replace(/\s+/g, "");

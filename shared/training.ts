@@ -9,25 +9,28 @@ import type { AthleteProgress, ProgrammeSummary, SessionLibraryResponse, Session
 export interface ProgrammeView {
   programme: ProgrammeSummary;
   sessions: SessionPackage[];
-  completed: number;
 }
 
-/** Programmes with their sessions (in order) and how many the athlete has done. */
-export function programmeViews(library: SessionLibraryResponse, progress: AthleteProgress): ProgrammeView[] {
+/** Programmes with their sessions, in order. */
+export function programmeViews(library: SessionLibraryResponse): ProgrammeView[] {
   const byId = new Map(library.sessions.map((session) => [session.id, session]));
-  const done = new Set(progress.completedSessionIds ?? []);
   return library.programmes
-    .map((programme) => {
-      const sessions = programme.sessionIds
+    .map((programme) => ({
+      programme,
+      sessions: programme.sessionIds
         .map((id) => byId.get(id))
-        .filter((session): session is SessionPackage => Boolean(session));
-      return { programme, sessions, completed: sessions.filter((session) => done.has(session.id)).length };
-    })
+        .filter((session): session is SessionPackage => Boolean(session)),
+    }))
     .filter((view) => view.sessions.length > 0);
 }
 
-/** Midfielders start on the midfield programme; everyone else on the goalscorer one. */
+/**
+ * The programme the player is working on: the one they chose, otherwise the
+ * midfield programme for midfielders and the goalscorer one for everyone else.
+ */
 export function currentProgramme(views: ProgrammeView[], plan: OnboardingPlan | null): ProgrammeView | undefined {
+  const chosen = plan?.programme && views.find((view) => view.programme.slug === plan.programme);
+  if (chosen) return chosen;
   const wanted = plan?.position === "midfielder" ? "midfield" : "goalscorer";
   return views.find((view) => view.programme.slug.includes(wanted)) ?? views[0];
 }

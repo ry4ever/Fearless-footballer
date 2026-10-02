@@ -1,6 +1,6 @@
 import { photo } from "../lib/onboardingOptions";
 import { LoadState, PendingNote } from "./LiveHQScreen";
-import { lastSevenDayLabels, programmeViews, useAthleteData } from "./useAthleteData";
+import { lastSevenDayLabels, useAthleteData } from "./useAthleteData";
 
 const plural = (count: number, one: string, many: string) => (count === 1 ? one : many);
 
@@ -14,7 +14,6 @@ export function LiveProgressScreen() {
     return <LoadState error={error} onRetry={() => void reload()} label="Loading your progress…" />;
   }
 
-  const views = programmeViews(library, progress);
   const dayLabels = lastSevenDayLabels();
   const total = progress.totalCompletions ?? 0;
   const weeks = progress.consecutiveWeeks ?? 0;
@@ -73,24 +72,6 @@ export function LiveProgressScreen() {
         )}
       </section>
 
-      {views.length > 0 && (
-        <section className="hq2-card" aria-label="Programmes">
-          <span className="hq2-eyebrow">PROGRAMMES</span>
-          {views.map((view) => (
-            <div key={view.programme.slug} className="hq2-progress-row">
-              <div className="hq2-row">
-                <strong>{view.programme.title}</strong>
-                <small className="hq2-meta">
-                  {view.completed}/{view.sessions.length}
-                </small>
-              </div>
-              <span className="hq2-bar" aria-hidden="true">
-                <span style={{ width: `${(view.completed / view.sessions.length) * 100}%` }} />
-              </span>
-            </div>
-          ))}
-        </section>
-      )}
 
       <section className="hq2-card pr-habit" aria-label="Training habit">
         <span className="hq2-eyebrow">TRAINING HABIT</span>

@@ -73,6 +73,7 @@ export async function syncContent(prisma: PrismaClient, contentRoot: string) {
       videoUrl: audio && manifest.videos?.[session.slug]?.uploaded ? manifest.videos[session.slug]!.key : null,
       videoDurationSeconds:
         audio && manifest.videos?.[session.slug]?.uploaded ? manifest.videos[session.slug]!.durationSeconds : null,
+      tagline: session.tagline,
       tags: session.tags,
       // Keep the legacy single-file fields meaningful for older clients.
       defaultDuration: interactive?.durationSeconds ?? 600,
@@ -107,10 +108,17 @@ export async function syncContent(prisma: PrismaClient, contentRoot: string) {
     await prisma.$transaction(async (tx) => {
       const saved = await tx.programme.upsert({
         where: { slug: programme.slug },
-        update: { title: programme.title, description: programme.description, sortOrder: programme.sortOrder, isPublished: true },
+        update: {
+          title: programme.title,
+          tagline: programme.tagline,
+          description: programme.description,
+          sortOrder: programme.sortOrder,
+          isPublished: true,
+        },
         create: {
           slug: programme.slug,
           title: programme.title,
+          tagline: programme.tagline,
           description: programme.description,
           sortOrder: programme.sortOrder,
           isPublished: true,

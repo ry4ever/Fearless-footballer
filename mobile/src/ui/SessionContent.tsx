@@ -4,28 +4,18 @@ import { colors } from "./index";
 import { fonts } from "./fonts";
 
 /**
- * One session in a list: number (in programmes), title and category. Playable
- * sessions open on press; coming-soon ones are listed only.
+ * One session in a list: title and category. Playable sessions open on
+ * press; coming-soon ones are listed only.
  */
 export function SessionRow({
   session,
-  index,
-  done = false,
   onPress,
 }: {
   session: SessionPackage;
-  index?: number;
-  /** Completed at least once (programme lists fill the number in). */
-  done?: boolean;
   onPress: () => void;
 }) {
   const content = (
     <>
-      {index !== undefined ? (
-        <View style={[styles.index, done && styles.indexDone]}>
-          <Text style={[styles.indexText, done && styles.indexTextDone]}>{index}</Text>
-        </View>
-      ) : null}
       <View style={styles.rowText}>
         <Text style={styles.title}>{session.title}</Text>
         {session.focusArea ? <Text style={styles.meta}>{session.focusArea}</Text> : null}
@@ -74,17 +64,6 @@ const styles = {
   },
   rowSoon: { opacity: 0.6 },
   pressed: { opacity: 0.8 },
-  index: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: "rgba(105, 224, 250, 0.14)",
-  },
-  indexText: { fontFamily: fonts.w900, color: colors.cyan, fontSize: 12 },
-  indexDone: { backgroundColor: colors.cyan },
-  indexTextDone: { color: "#041126" },
   rowText: { flex: 1 },
   title: { fontFamily: fonts.w800, color: colors.white, fontSize: 15 },
   meta: { fontFamily: fonts.w400, color: colors.muted, fontSize: 12, marginTop: 2 },

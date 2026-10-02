@@ -170,18 +170,6 @@
 }
 .live-session-row + .live-session-row { margin-top: 8px; }
 .live-session-row:hover { border-color: rgba(105, 224, 250, 0.4); }
-.live-session-row .row-index {
-  display: grid;
-  place-items: center;
-  flex-shrink: 0;
-  width: 28px;
-  height: 28px;
-  border-radius: 50%;
-  color: var(--cyan);
-  background: rgba(105, 224, 250, 0.12);
-  font-size: 12px;
-  font-weight: 800;
-}
 .live-session-row .row-text { flex: 1; min-width: 0; }
 .live-session-row strong { display: block; font-size: 14px; }
 .live-session-row small { display: block; color: #8fa3c7; font-size: 12px; }

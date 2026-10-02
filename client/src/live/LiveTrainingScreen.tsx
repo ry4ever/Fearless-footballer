@@ -1,27 +1,22 @@
+import { useState } from "react";
 import { ChevronRight } from "lucide-react";
 import type { SessionPackage } from "@shared/types";
+import { AthleteHeader } from "./AthleteHeader";
 import { LoadState, PendingNote } from "./LiveHQScreen";
-import { programmePhoto, programmeViews, useAthleteData } from "./useAthleteData";
+import { loadPlan } from "./plan";
+import { useSession } from "./session";
+import { currentProgramme, programmePhoto, programmeViews, useAthleteData } from "./useAthleteData";
 
 interface LiveTrainingScreenProps {
   onStartSession: (session: SessionPackage) => void;
+  onOpenProgramme: (slug: string) => void;
+  onOpenAccount: () => void;
 }
 
 /** A playable session opens straight into the player; coming-soon ones are listed only. */
-function SessionRow({
-  session,
-  index,
-  done,
-  onStart,
-}: {
-  session: SessionPackage;
-  index?: number;
-  done?: boolean;
-  onStart: (session: SessionPackage) => void;
-}) {
+function SessionRow({ session, onStart }: { session: SessionPackage; onStart: (session: SessionPackage) => void }) {
   const content = (
     <>
-      {index !== undefined && <span className={`row-index ${done ? "done" : ""}`}>{index}</span>}
       <span className="row-text">
         <strong>{session.title}</strong>
         {session.focusArea && <small>{session.focusArea}</small>}
@@ -43,14 +38,23 @@ function SessionRow({
   );
 }
 
-export function LiveTrainingScreen({ onStartSession }: LiveTrainingScreenProps) {
+type TrainingTab = "programmes" | "sessions";
+
+/**
+ * Programmes to choose from (each opens its own page) and, under My
+ * Sessions, every session in the library.
+ */
+export function LiveTrainingScreen({ onStartSession, onOpenProgramme, onOpenAccount }: LiveTrainingScreenProps) {
+  const { user } = useSession();
   const { progress, library, error, pending, reload } = useAthleteData();
+  const [tab, setTab] = useState<TrainingTab>("programmes");
   if (!progress || !library) {
     return <LoadState error={error} onRetry={() => void reload()} label="Loading your training…" />;
   }
 
-  const done = new Set(progress.completedSessionIds ?? []);
-  const views = programmeViews(library, progress);
+  const plan = user ? loadPlan(user.id) : null;
+  const views = programmeViews(library);
+  const current = currentProgramme(views, plan);
   const playable = library.sessions.filter((session) => !session.comingSoon);
   const comingSoon = library.sessions.filter((session) => session.comingSoon);
   const groups = new Map<string, SessionPackage[]>();
@@ -58,72 +62,89 @@ export function LiveTrainingScreen({ onStartSession }: LiveTrainingScreenProps) 
     const key = session.focusArea ?? "Sessions";
     groups.set(key, [...(groups.get(key) ?? []), session]);
   }
+  const firstName = progress.athleteName.trim().split(/\s+/)[0] || "Player";
 
   return (
     <div className="screen hq2-screen">
       <div className="hq2-glow" aria-hidden="true" />
-      <section className="hq2-hello hq2-page-title">
+      <AthleteHeader name={firstName} onOpenAccount={onOpenAccount} />
+      <section className="hq2-hello">
         <h1>
           Your <span>Training</span>
         </h1>
         <span className="hq2-method">SEE | REHEARSE | BECOME</span>
       </section>
 
+      <div className="tr-tabs" role="tablist" aria-label="Training">
+        <button type="button" role="tab" aria-selected={tab === "programmes"} onClick={() => setTab("programmes")}>
+          Programmes
+        </button>
+        <button type="button" role="tab" aria-selected={tab === "sessions"} onClick={() => setTab("sessions")}>
+          My Sessions
+        </button>
+      </div>
+
       <PendingNote pending={pending} />
 
-      {views.map((view) => (
-        <section key={view.programme.slug} className="hq2-card hq2-programme-card" aria-label={view.programme.title}>
-          <div className="hq2-programme-hero">
-            <img src={programmePhoto(view.programme.slug)} alt="" />
-            <div>
-              <span className="hq2-eyebrow">PROGRAMME</span>
-              <h2>{view.programme.title}</h2>
-            </div>
-          </div>
-          <div>
-            <span className="hq2-bar" aria-hidden="true">
-              <span style={{ width: `${(view.completed / view.sessions.length) * 100}%` }} />
-            </span>
-            <small className="hq2-meta">
-              {view.completed} of {view.sessions.length} sessions
-            </small>
-          </div>
-          <p className="live-copy">{view.programme.description}</p>
-          <div className="hq2-rows">
-            {view.sessions.map((session, index) => (
-              <SessionRow key={session.id} session={session} index={index + 1} done={done.has(session.id)} onStart={onStartSession} />
-            ))}
-          </div>
-        </section>
-      ))}
-
-      {playable.length === 0 ? (
-        <section className="hq2-card" aria-label="Sessions">
-          <span className="hq2-eyebrow">ALL SESSIONS</span>
-          <h2>No session available yet</h2>
-          <p className="live-copy">New training is on its way. Check back soon – your progress is saved.</p>
-        </section>
+      {tab === "programmes" ? (
+        views.length === 0 ? (
+          <section className="hq2-card">
+            <h2>Programmes are on their way</h2>
+            <p className="live-copy">In the meantime, every session is under My Sessions.</p>
+          </section>
+        ) : (
+          views.map((view) => (
+            <button
+              key={view.programme.slug}
+              type="button"
+              className="tr-programme"
+              onClick={() => onOpenProgramme(view.programme.slug)}
+              aria-label={`${view.programme.title}${view === current ? ", your programme" : ""}. Open the programme`}
+            >
+              <img src={programmePhoto(view.programme.slug)} alt="" />
+              <span className="tr-programme-text">
+                <span className="hq2-eyebrow">{view === current ? "YOUR PROGRAMME" : "PROGRAMME"}</span>
+                <strong>{view.programme.title}</strong>
+                {view.programme.tagline && <small>{view.programme.tagline}</small>}
+              </span>
+              <span className="tr-programme-go" aria-hidden="true">
+                <ChevronRight size={22} />
+              </span>
+            </button>
+          ))
+        )
       ) : (
-        <section aria-label="All sessions">
-          <span className="hq2-eyebrow hq2-section-label">ALL SESSIONS</span>
-          {Array.from(groups.entries()).map(([group, sessions]) => (
-            <div key={group} className="hq2-group">
-              <p className="hq2-group-label">{group}</p>
-              {sessions.map((session) => (
-                <SessionRow key={session.id} session={session} onStart={onStartSession} />
+        <>
+          {playable.length === 0 ? (
+            <section className="hq2-card" aria-label="Sessions">
+              <h2>No session available yet</h2>
+              <p className="live-copy">New training is on its way. Check back soon – your progress is saved.</p>
+            </section>
+          ) : (
+            <section aria-label="All sessions">
+              {Array.from(groups.entries()).map(([group, sessions]) => (
+                <div key={group} className="hq2-group">
+                  <p className="hq2-group-label">{group}</p>
+                  <div className="hq2-rows">
+                    {sessions.map((session) => (
+                      <SessionRow key={session.id} session={session} onStart={onStartSession} />
+                    ))}
+                  </div>
+                </div>
               ))}
-            </div>
-          ))}
-        </section>
-      )}
-
-      {comingSoon.length > 0 && (
-        <section aria-label="Coming soon">
-          <span className="hq2-eyebrow hq2-section-label">COMING SOON</span>
-          {comingSoon.map((session) => (
-            <SessionRow key={session.id} session={session} onStart={onStartSession} />
-          ))}
-        </section>
+            </section>
+          )}
+          {comingSoon.length > 0 && (
+            <section aria-label="Coming soon">
+              <span className="hq2-eyebrow hq2-section-label">COMING SOON</span>
+              <div className="hq2-rows">
+                {comingSoon.map((session) => (
+                  <SessionRow key={session.id} session={session} onStart={onStartSession} />
+                ))}
+              </div>
+            </section>
+          )}
+        </>
       )}
     </div>
   );

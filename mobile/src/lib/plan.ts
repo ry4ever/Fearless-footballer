@@ -19,3 +19,9 @@ export async function loadPlan(userId: string): Promise<OnboardingPlan | null> {
 export async function savePlan(userId: string, plan: OnboardingPlan): Promise<void> {
   await AsyncStorage.setItem(key(userId), JSON.stringify(plan));
 }
+
+/** Records the programme the player chose on the Training tab. */
+export async function chooseProgramme(userId: string, programme: string): Promise<void> {
+  const plan = await loadPlan(userId);
+  if (plan) await savePlan(userId, { ...plan, programme });
+}

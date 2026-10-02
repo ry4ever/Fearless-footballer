@@ -544,6 +544,29 @@ describe.skipIf(!process.env.DATABASE_URL)("Phase 2 Security Integration Tests",
       expect(progress.consecutiveWeeks).toBe(1);
       expect(progress.completionsByArea).toEqual([{ area: "Sharpen Your Game", count: 1 }]);
 
+      // A reflection can be just the athlete's notes, without a feeling.
+      const noteOnly = await fetch(`${baseUrl}/sessions/${playable.id}/complete`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}`, "Idempotency-Key": `lib-d-${stamp}` },
+        body: JSON.stringify({
+          sessionId: playable.id,
+          sessionVersion: "1.0.0",
+          mode: "relaxation",
+          withMusic: false,
+          completionDurationSeconds: 250,
+          completedAt: new Date().toISOString(),
+          reflection: { note: "Saw the space earlier today." },
+          idempotencyKey: `lib-d-${stamp}`,
+        }),
+      });
+      expect(noteOnly.status).toBe(200);
+      const noted = await prisma.sessionCompleted.findUniqueOrThrow({
+        where: { idempotencyKey: `lib-d-${stamp}` },
+        include: { reflection: true },
+      });
+      expect(noted.reflection?.feeling).toBeNull();
+      expect(noted.reflection?.athleteNote).toBeTruthy();
+
       // Programmes aren't removed with their sessions; don't leave this one behind.
       await prisma.programme.delete({ where: { slug: `library-programme-${stamp}` } });
     },

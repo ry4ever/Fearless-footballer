@@ -9,6 +9,7 @@ import {
   Info,
   Lock,
   Music,
+  NotebookPen,
   Pause,
   Play,
   UserRound,
@@ -326,7 +327,9 @@ function PlayerCore({ session, variant, modes, onChooseMode, hasMusicChoice, onC
       ...(variant ? { withMusic: variant.withMusic } : {}),
       completionDurationSeconds: Math.min(Math.round(listened), duration),
       completedAt: new Date().toISOString(),
-      ...(feeling ? { reflection: { feeling, ...(note.trim() ? { note: note.trim() } : {}) } } : {}),
+      ...(feeling || note.trim()
+        ? { reflection: { ...(feeling ? { feeling } : {}), ...(note.trim() ? { note: note.trim() } : {}) } }
+        : {}),
       idempotencyKey: idempotencyKey.current,
     };
     try {
@@ -554,8 +557,8 @@ function PlayerCore({ session, variant, modes, onChooseMode, hasMusicChoice, onC
             style={{ maxHeight: "90vh", overflowY: "auto" }}
           >
             <span className="eyebrow">REFLECT</span>
-            <h3 id="reflection-title">How do you feel about your next match?</h3>
-            <div className="live-choice-list" role="group" aria-label="How you feel">
+            <h3 id="reflection-title">How did that feel?</h3>
+            <div className="live-choice-list" role="group" aria-label="How you feel (optional)">
               {FEELINGS.map((item) => (
                 <button
                   key={item.id}
@@ -572,14 +575,21 @@ function PlayerCore({ session, variant, modes, onChooseMode, hasMusicChoice, onC
                 </button>
               ))}
             </div>
-            {feeling && (
-              <label className="live-field" style={{ marginTop: 12 }}>
-                Private note (optional)
-                <textarea value={note} onChange={(e) => setNote(e.target.value)} maxLength={1000} />
-              </label>
-            )}
+            <label className="rf-notepad">
+              <span className="rf-notepad-label">
+                <NotebookPen size={18} /> Your reflection
+              </span>
+              <textarea
+                value={note}
+                onChange={(e) => setNote(e.target.value)}
+                maxLength={1000}
+                rows={6}
+                placeholder="What did you see? What felt different? What will you take into your next game?"
+              />
+              <small>{note.length}/1000</small>
+            </label>
             <p className="live-note" style={{ margin: "12px 0" }}>
-              Your feelings and notes are private to you. They're never graded or shown to your parent or guardian.
+              Your reflections are private to you. They're never graded or shown to your parent or guardian.
             </p>
             {submitError && (
               <div className="live-error" role="alert" style={{ marginBottom: 12 }}>

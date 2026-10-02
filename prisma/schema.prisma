@@ -81,7 +81,8 @@ model MetricSnapshot {
 model Reflection {
   id               String            @id @default(cuid())
   completionId     String            @unique
-  feeling          ReflectionFeeling
+  /// Optional: an athlete can leave just their notes.
+  feeling          ReflectionFeeling?
   athleteNote      String?
   createdAt        DateTime          @default(now())
   sessionCompleted SessionCompleted  @relation(fields: [completionId], references: [id], onDelete: Cascade)
@@ -118,6 +119,8 @@ model Session {
   videoUrl            String?
   /// Length of that video, for the "2 MIN" label.
   videoDurationSeconds Int?
+  /// One line under the title in programme lists.
+  tagline             String?
   /// Short labels under the title, e.g. ["Confidence", "Self-Belief", "Match Preparation"].
   tags                String[]           @default([])
   sessionCompletions  SessionCompleted[]
@@ -149,6 +152,8 @@ model Programme {
   id          String             @id @default(cuid())
   slug        String             @unique
   title       String
+  /// One line on the programme card, e.g. "Become more dangerous in and around the box."
+  tagline     String?
   description String
   sortOrder   Int                @default(0)
   isPublished Boolean            @default(true)

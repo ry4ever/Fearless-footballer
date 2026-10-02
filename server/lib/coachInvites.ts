@@ -6,13 +6,16 @@ import { hashPairingCode } from "./pii";
  * Coaches who can invite other coaches (Mark), from COACH_ADMIN_EMAILS
  * (comma-separated). They can also create their own coach account without an
  * invite. Compared by email hash, since emails are stored encrypted.
+ * Read on each request, so a changed variable applies after a restart.
  */
 export function coachAdminEmailHashes(hash: (email: string) => string): Set<string> {
   return new Set(
     (process.env.COACH_ADMIN_EMAILS ?? "")
-      .split(",")
-      .map((email) => email.trim().toLowerCase())
-      .filter(Boolean)
+      // Forgiving about how the list was typed: commas, semicolons, spaces or
+      // new lines between emails, and stray quotes around them.
+      .split(/[\s,;]+/)
+      .map((email) => email.replace(/^["'<]+|["'>]+$/g, "").trim().toLowerCase())
+      .filter((email) => email.includes("@"))
       .map(hash),
   );
 }

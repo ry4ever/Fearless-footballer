@@ -27,7 +27,13 @@ import type {
   SessionRetrieveResponse,
   SignInAccountRequest,
 } from "../../../shared/types";
-import type { AthleteProgress, PairingStatusResponse, UserAccount } from "../../../shared/types";
+import type {
+  AthleteCoachLink,
+  AthleteProgress,
+  CaregiverCoachLink,
+  PairingStatusResponse,
+  UserAccount,
+} from "../../../shared/types";
 import {
   loadSessionState,
   saveSessionState,
@@ -675,6 +681,48 @@ export const apiClient = {
     }
 
     return { synced, failed };
+  },
+
+  // ---- Coaches -----------------------------------------------------------------
+
+  async getMyCoach(role: BetaUserRole): Promise<ApiResult<{ coach: AthleteCoachLink | null }>> {
+    return apiRequest<{ coach: AthleteCoachLink | null }>("GET", "/athlete/coach", undefined, { role, authenticated: true });
+  },
+
+  async joinSquad(role: BetaUserRole, squadCode: string): Promise<ApiResult<{ coach: AthleteCoachLink }>> {
+    return apiRequest<{ coach: AthleteCoachLink }>("POST", "/athlete/coach", { squadCode }, {
+      role,
+      authenticated: true,
+      retryable: false,
+    });
+  },
+
+  async leaveCoach(role: BetaUserRole, linkId: string): Promise<ApiResult<void>> {
+    return apiRequest<void>("DELETE", `/athlete/coach/${encodeURIComponent(linkId)}`, undefined, {
+      role,
+      authenticated: true,
+      retryable: false,
+    });
+  },
+
+  async getCoachRequests(role: BetaUserRole): Promise<ApiResult<{ coaches: CaregiverCoachLink[] }>> {
+    return apiRequest<{ coaches: CaregiverCoachLink[] }>("GET", "/caregiver/coaches", undefined, { role, authenticated: true });
+  },
+
+  async decideCoachRequest(role: BetaUserRole, linkId: string, approved: boolean): Promise<ApiResult<{ status: string }>> {
+    return apiRequest<{ status: string }>("POST", `/caregiver/coaches/${encodeURIComponent(linkId)}/decision`, { approved }, {
+      role,
+      authenticated: true,
+      retryable: false,
+    });
+  },
+
+  async removeCoach(role: BetaUserRole, linkId: string): Promise<ApiResult<void>> {
+    return apiRequest<void>("DELETE", `/caregiver/coaches/${encodeURIComponent(linkId)}`, undefined, {
+      role,
+      authenticated: true,
+      retryable: false,
+    });
   },
 
   // ---- Aggregations ----------------------------------------------------------

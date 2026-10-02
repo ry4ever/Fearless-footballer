@@ -2,7 +2,9 @@ import { useCallback, useEffect, useState } from "react";
 import type { AthleteProgress, SessionLibraryResponse } from "@shared/types";
 import { apiClient } from "../lib/apiClient";
 import { offlineQueue } from "../lib/offlineQueue";
-import { photo, programmePhoto as sharedProgrammePhoto } from "../lib/onboardingOptions";
+import { programmeViewPhoto } from "@shared/player";
+import type { ProgrammeView } from "@shared/training";
+import { photo } from "../lib/onboardingOptions";
 import { useSession } from "./session";
 
 /** Progress and the session library, reloaded when queued offline reps sync. */
@@ -42,6 +44,14 @@ export function useAthleteData() {
   return { progress, library, error, pending, reload: load };
 }
 
-export { currentProgramme, lastSevenDayLabels, nextSession, programmeViews, type ProgrammeView } from "@shared/training";
+export {
+  currentProgramme,
+  isCoachPlan,
+  lastSevenDayLabels,
+  nextSession,
+  programmeViews,
+  type ProgrammeView,
+} from "@shared/training";
 
-export const programmePhoto = (slug: string) => photo(sharedProgrammePhoto(slug));
+/** Card photo for a programme (a coach's plan uses its first session's). */
+export const programmePhoto = (view: ProgrammeView) => photo(programmeViewPhoto(view));

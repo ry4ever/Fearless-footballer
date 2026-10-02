@@ -39,6 +39,8 @@ import {
   SignInAccountRequest,
   UserAccount,
   PlaybackEventRequest,
+  AthleteCoachLink,
+  CaregiverCoachLink,
 } from "../../../shared/types";
 import { LocalBetaApi, createLocalBetaApi, LocalApiError } from "./localBetaApi";
 import { apiClient, NetworkError } from "./apiClient";
@@ -68,7 +70,22 @@ export type ApiFacade = Omit<
    * Never throws; when offline the last known state is kept.
    */
   syncPairing(): Promise<void>;
+  /** Coaches need the online app; local beta mode has none. */
+  getMyCoach(): Promise<AthleteCoachLink | null>;
+  joinSquad(squadCode: string): Promise<AthleteCoachLink>;
+  leaveCoach(linkId: string): Promise<void>;
+  getCoachRequests(): Promise<CaregiverCoachLink[]>;
+  decideCoachRequest(linkId: string, approved: boolean): Promise<void>;
+  removeCoach(linkId: string): Promise<void>;
 };
+
+/** Turns an API result into data, or throws its error message. */
+function unwrap<T>(result: { status: number; data?: T | null; error?: { error?: string } | null }, okStatuses: number[], fallback: string): T {
+  if (okStatuses.includes(result.status)) return result.data as T;
+  throw new LocalApiError(result.error?.error ?? fallback, result.status);
+}
+
+const COACH_OFFLINE = "Coaches are available in the online app.";
 
 /**
  * After a successful production register/sign-in, persist the
@@ -416,6 +433,42 @@ export function getApiFacade(dependencies?: {
         );
       }
       return localApi.getCaregiverDashboard(athleteId);
+    },
+
+    async getMyCoach() {
+      if (!isProductionApi()) return null;
+      await assertSignedIn();
+      return unwrap(await apiClient.getMyCoach(role!), [200], "Unable to load your coach.").coach;
+    },
+
+    async joinSquad(squadCode: string) {
+      if (!isProductionApi()) throw new LocalApiError(COACH_OFFLINE, 501);
+      await assertSignedIn();
+      return unwrap(await apiClient.joinSquad(role!, squadCode), [201], "Unable to send your request.").coach;
+    },
+
+    async leaveCoach(linkId: string) {
+      if (!isProductionApi()) throw new LocalApiError(COACH_OFFLINE, 501);
+      await assertSignedIn();
+      unwrap(await apiClient.leaveCoach(role!, linkId), [204], "Unable to remove your coach.");
+    },
+
+    async getCoachRequests() {
+      if (!isProductionApi()) return [];
+      await assertSignedIn();
+      return unwrap(await apiClient.getCoachRequests(role!), [200], "Unable to load coach requests.").coaches;
+    },
+
+    async decideCoachRequest(linkId: string, approved: boolean) {
+      if (!isProductionApi()) throw new LocalApiError(COACH_OFFLINE, 501);
+      await assertSignedIn();
+      unwrap(await apiClient.decideCoachRequest(role!, linkId, approved), [200], "Unable to save your decision.");
+    },
+
+    async removeCoach(linkId: string) {
+      if (!isProductionApi()) throw new LocalApiError(COACH_OFFLINE, 501);
+      await assertSignedIn();
+      unwrap(await apiClient.removeCoach(role!, linkId), [204], "Unable to remove the coach.");
     },
 
     async revokeConsent(linkId: string): Promise<ConsentRevocationResponse> {

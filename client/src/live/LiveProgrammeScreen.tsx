@@ -8,7 +8,7 @@ import { LoadState } from "./LiveHQScreen";
 import { chooseProgramme, loadPlan } from "./plan";
 import { useSession } from "./session";
 import "./player.css";
-import { currentProgramme, programmePhoto, programmeViews, useAthleteData } from "./useAthleteData";
+import { currentProgramme, isCoachPlan, programmePhoto, programmeViews, useAthleteData } from "./useAthleteData";
 
 interface LiveProgrammeScreenProps {
   slug: string;
@@ -34,11 +34,12 @@ export function LiveProgrammeScreen({ slug, onBack, onStartSession, onChosen }: 
   }
   const plan = user ? loadPlan(user.id) : null;
   const isCurrent = currentProgramme(views, plan) === view;
+  const coachPlanActive = views.some(isCoachPlan);
 
   return (
     <div className="screen hq2-screen pg-screen">
       <section className="pg-hero">
-        <img src={programmePhoto(view.programme.slug)} alt="" />
+        <img src={programmePhoto(view)} alt="" />
         <header className="ps-top">
           <button type="button" className="ps-back" onClick={onBack} aria-label="Back to Training">
             <ArrowLeft size={20} />
@@ -47,7 +48,7 @@ export function LiveProgrammeScreen({ slug, onBack, onStartSession, onChosen }: 
           <span className="ps-back-spacer" aria-hidden="true" />
         </header>
         <div className="pg-title">
-          <span className="ps-eyebrow">{isCurrent ? "YOUR PROGRAMME" : "PROGRAMME"}</span>
+          <span className="ps-eyebrow">{isCoachPlan(view) ? "FROM YOUR COACH" : isCurrent ? "YOUR PROGRAMME" : "PROGRAMME"}</span>
           <h1>{view.programme.title}</h1>
           {view.programme.tagline && <p>{view.programme.tagline}</p>}
         </div>
@@ -90,7 +91,12 @@ export function LiveProgrammeScreen({ slug, onBack, onStartSession, onChosen }: 
 
         {isCurrent ? (
           <p className="pg-current" role="status">
-            <Check size={18} /> This is your programme. Its next session is on Home.
+            <Check size={18} /> {isCoachPlan(view) ? "Your coach set this plan." : "This is your programme."} Its next session
+            is on Home.
+          </p>
+        ) : coachPlanActive ? (
+          <p className="pg-current pg-coach-note" role="status">
+            Your coach has set your plan, so Home follows it. You can still play any of these sessions.
           </p>
         ) : (
           <button

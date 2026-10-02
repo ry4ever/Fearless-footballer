@@ -1,9 +1,8 @@
 import { useState } from "react";
 import { Image, Pressable, Text, View } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { programmePhoto } from "../../../../shared/onboarding";
-import { sessionPhoto } from "../../../../shared/player";
-import { currentProgramme, programmeViews } from "../../../../shared/training";
+import { programmeViewPhoto, sessionPhoto } from "../../../../shared/player";
+import { currentProgramme, isCoachPlan, programmeViews } from "../../../../shared/training";
 import { chooseProgramme } from "../../../src/lib/plan";
 import { useAthleteData } from "../../../src/lib/useAthleteData";
 import { AthleteRouteGuard } from "../../../src/session";
@@ -53,7 +52,7 @@ function ProgrammeContent() {
   return (
     <Screen testID="athlete-programme-screen" footer={<TabBar active="training" />}>
       <View style={styles.hero}>
-        <Image source={photos[programmePhoto(view.programme.slug)]} style={styles.fill} resizeMode="cover" />
+        <Image source={photos[programmeViewPhoto(view)]} style={styles.fill} resizeMode="cover" />
         <View style={styles.heroShade} />
         <View style={styles.heroTop}>
           <Pressable accessibilityRole="button" accessibilityLabel="Back to Training" onPress={() => router.back()} style={styles.back} hitSlop={8}>
@@ -63,7 +62,7 @@ function ProgrammeContent() {
           <View style={styles.back} />
         </View>
         <View style={styles.heroTitle}>
-          <Text style={styles.eyebrow}>{isCurrent ? "YOUR PROGRAMME" : "PROGRAMME"}</Text>
+          <Text style={styles.eyebrow}>{isCoachPlan(view) ? "FROM YOUR COACH" : isCurrent ? "YOUR PROGRAMME" : "PROGRAMME"}</Text>
           <Text style={styles.title} accessibilityRole="header">
             {view.programme.title}
           </Text>
@@ -112,8 +111,10 @@ function ProgrammeContent() {
 
       {isCurrent ? (
         <Text style={styles.current} accessibilityRole="text">
-          ✓ This is your programme. Its next session is on Home.
+          ✓ {isCoachPlan(view) ? "Your coach set this plan." : "This is your programme."} Its next session is on Home.
         </Text>
+      ) : views.some(isCoachPlan) ? (
+        <Text style={styles.coachNote}>Your coach has set your plan, so Home follows it. You can still play any of these sessions.</Text>
       ) : (
         <Pressable
           accessibilityRole="button"
@@ -169,6 +170,7 @@ const styles = {
   chevron: { alignSelf: "center", marginRight: 12, color: colors.cyan, fontSize: 24 },
   about: { fontFamily: fonts.w400, color: "#CFDCF0", fontSize: 14.5, lineHeight: 22 },
   current: { fontFamily: fonts.w600, color: colors.cyan, fontSize: 14, marginTop: 6, marginBottom: 12 },
+  coachNote: { fontFamily: fonts.w500, color: "#A4B6D4", fontSize: 13.5, lineHeight: 20, marginTop: 6, marginBottom: 12 },
   choose: { minHeight: 54, marginTop: 6, marginBottom: 12, borderRadius: 16, alignItems: "center", justifyContent: "center", backgroundColor: colors.cyanStrong },
   chooseText: { fontFamily: fonts.w800, color: "#041126", fontSize: 16 },
 } as const;

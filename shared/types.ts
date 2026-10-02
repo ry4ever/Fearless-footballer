@@ -1,4 +1,4 @@
-export type BetaUserRole = "athlete" | "caregiver";
+export type BetaUserRole = "athlete" | "caregiver" | "coach";
 export type BetaSessionMode = "interactive";
 export type SessionMode = BetaSessionMode | "guidance" | "relaxation";
 export type MindsetCategory =
@@ -134,6 +134,76 @@ export interface SessionLibraryResponse {
   /** Playable sessions first (library order), then coming-soon ones. */
   sessions: SessionPackage[];
   programmes: ProgrammeSummary[];
+  /** The athlete's coach's plan, when a linked coach has set one. */
+  coachPlan?: CoachPlanSummary;
+}
+
+/** Sessions a coach picked for an athlete, in order. */
+export interface CoachPlanSummary {
+  coachName: string;
+  sessionIds: string[];
+  updatedAt: string;
+}
+
+// --- Coaches -----------------------------------------------------------------
+
+export type CoachLinkStatus = "pending_parent" | "active" | "declined" | "revoked";
+
+/** The athlete's view of their coach. */
+export interface AthleteCoachLink {
+  id: string;
+  coachName: string;
+  status: CoachLinkStatus;
+  requestedAt: string;
+}
+
+/** A coach request or link, as the parent or guardian sees it. */
+export interface CaregiverCoachLink {
+  id: string;
+  coachName: string;
+  athleteName: string;
+  status: CoachLinkStatus;
+  requestedAt: string;
+}
+
+/** One athlete in a coach's squad list. */
+export interface CoachSquadAthlete {
+  linkId: string;
+  athleteName: string;
+  status: CoachLinkStatus;
+  requestedAt: string;
+  /** Only filled in once the parent has approved. */
+  totalCompletions?: number;
+  lastSessionAt?: string;
+  hasPlan: boolean;
+}
+
+export interface CoachSquadResponse {
+  coachName: string;
+  squadCode: string;
+  athletes: CoachSquadAthlete[];
+}
+
+/**
+ * What a coach sees about one athlete: training progress only. Reflections,
+ * notes and personal details are never included.
+ */
+export interface CoachAthleteDetail {
+  linkId: string;
+  athleteName: string;
+  progress: {
+    totalCompletions: number;
+    consecutiveWeeks: number;
+    completionsByArea: { area: string; count: number }[];
+    currentStreakDays: number;
+    bestStreakDays: number;
+    weeklyCompletedDays: number;
+    sevenDayPattern: boolean[];
+    lastSession?: { title: string; completedAt: string };
+  };
+  plan: { sessionIds: string[]; updatedAt?: string };
+  /** Playable sessions the coach can build a plan from. */
+  sessions: Array<Pick<SessionPackage, "id" | "title" | "focusArea" | "tagline">>;
 }
 
 export interface UserAccount {
@@ -162,6 +232,8 @@ export interface RegisterAccountRequest {
   region?: string;
   /** Local beta acknowledgement; production consent is server-owned. */
   privacyAcknowledged?: boolean;
+  /** Required for coach accounts (they're invite-only). */
+  inviteCode?: string;
 }
 
 export interface SignInAccountRequest {

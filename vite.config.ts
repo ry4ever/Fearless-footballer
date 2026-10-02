@@ -229,7 +229,7 @@ export default defineConfig({
     port: 5173,
     strictPort: false,
     proxy: Object.fromEntries(
-      ["/auth", "/sessions", "/caregiver", "/athlete", "/admin", "/feedback", "/health"].map((prefix) => [
+      ["/auth", "/sessions", "/caregiver", "/athlete", "/coach", "/admin", "/feedback", "/health"].map((prefix) => [
         prefix,
         {
           target: API_PROXY_TARGET,

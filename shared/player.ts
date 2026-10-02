@@ -1,4 +1,5 @@
-import type { PhotoName } from "./onboarding";
+import { programmePhoto, type PhotoName } from "./onboarding";
+import { isCoachPlan, type ProgrammeView } from "./training";
 import type { SessionMode, SessionPackage } from "./types";
 
 /** The three training styles, in Mark's words. Shared by web and mobile. */
@@ -50,4 +51,9 @@ export function sessionTags(session: Pick<SessionPackage, "tags" | "focusArea">)
 export function videoLengthLabel(seconds: number | undefined): string | null {
   if (!seconds) return null;
   return `${Math.max(1, Math.round(seconds / 60))} MIN`;
+}
+
+/** Card photo for a programme; a coach's plan uses its first session's photo. */
+export function programmeViewPhoto(view: ProgrammeView): PhotoName {
+  return isCoachPlan(view) && view.sessions[0] ? sessionPhoto(view.sessions[0]) : programmePhoto(view.programme.slug);
 }

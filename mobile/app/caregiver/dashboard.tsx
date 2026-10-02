@@ -6,6 +6,7 @@ import { getApiFacade, LocalApiError } from "../../src/lib/apiFacade";
 import { CaregiverRouteGuard, useSession } from "../../src/session";
 import { canAthleteAccessSession } from "../../src/lib/sessionGuard";
 import { addConnectivityListener } from "../../src/lib/offlineCompletionQueue";
+import { CaregiverCoachCard } from "../../src/ui/CoachCards";
 import {
   Brand,
   Button,
@@ -68,6 +69,7 @@ function CaregiverDashboardContent() {
         title={dashboard?.athlete.name ? `${dashboard.athlete.name}'s progress` : "Progress overview"}
         copy="This read-only view shares aggregate patterns, not private reflections or session content."
       />
+      <CaregiverCoachCard />
       {error ? (
         <StatusCard tone="danger" title="Dashboard unavailable">
           {error}

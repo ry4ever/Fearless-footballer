@@ -11,24 +11,45 @@ export interface ProgrammeView {
   sessions: SessionPackage[];
 }
 
-/** Programmes with their sessions, in order. */
+/** Slug of the plan a coach sets; it's shown like a programme. */
+export const COACH_PLAN_SLUG = "coach-plan";
+
+/** Programmes with their sessions, in order – the coach's plan first, when there is one. */
 export function programmeViews(library: SessionLibraryResponse): ProgrammeView[] {
   const byId = new Map(library.sessions.map((session) => [session.id, session]));
-  return library.programmes
-    .map((programme) => ({
-      programme,
-      sessions: programme.sessionIds
-        .map((id) => byId.get(id))
-        .filter((session): session is SessionPackage => Boolean(session)),
-    }))
+  const sessionsFor = (ids: string[]) =>
+    ids.map((id) => byId.get(id)).filter((session): session is SessionPackage => Boolean(session));
+  const views = library.programmes
+    .map((programme) => ({ programme, sessions: sessionsFor(programme.sessionIds) }))
     .filter((view) => view.sessions.length > 0);
+  const coach = library.coachPlan;
+  if (coach && sessionsFor(coach.sessionIds).length > 0) {
+    views.unshift({
+      programme: {
+        slug: COACH_PLAN_SLUG,
+        title: `${coach.coachName}'s plan`,
+        tagline: "Picked for you by your coach.",
+        description: `${coach.coachName} chose these sessions for you, in this order. Your next one is always on Home.`,
+        sessionIds: coach.sessionIds,
+      },
+      sessions: sessionsFor(coach.sessionIds),
+    });
+  }
+  return views;
+}
+
+export function isCoachPlan(view: ProgrammeView | undefined): boolean {
+  return view?.programme.slug === COACH_PLAN_SLUG;
 }
 
 /**
- * The programme the player is working on: the one they chose, otherwise the
- * midfield programme for midfielders and the goalscorer one for everyone else.
+ * The programme the player is working on: their coach's plan if they have
+ * one, then the one they chose, otherwise the midfield programme for
+ * midfielders and the goalscorer one for everyone else.
  */
 export function currentProgramme(views: ProgrammeView[], plan: OnboardingPlan | null): ProgrammeView | undefined {
+  const coach = views.find(isCoachPlan);
+  if (coach) return coach;
   const chosen = plan?.programme && views.find((view) => view.programme.slug === plan.programme);
   if (chosen) return chosen;
   const wanted = plan?.position === "midfielder" ? "midfield" : "goalscorer";

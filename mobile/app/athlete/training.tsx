@@ -1,9 +1,9 @@
 import { useState } from "react";
 import { Image, Pressable, Text, View } from "react-native";
 import { useRouter } from "expo-router";
-import { programmePhoto } from "../../../shared/onboarding";
-import { currentProgramme, programmeViews } from "../../../shared/training";
+import { currentProgramme, isCoachPlan, programmeViews } from "../../../shared/training";
 import type { SessionPackage } from "../../../shared/types";
+import { programmeViewPhoto } from "../../../shared/player";
 import { useAthleteData } from "../../src/lib/useAthleteData";
 import { AthleteRouteGuard } from "../../src/session";
 import { LoadingRow, Screen, StatusCard, colors } from "../../src/ui";
@@ -78,10 +78,10 @@ function TrainingContent() {
                 style={({ pressed }) => [styles.programme, pressed && hq.pressed]}
                 testID={`programme-${view.programme.slug}`}
               >
-                <Image source={photos[programmePhoto(view.programme.slug)]} style={styles.programmePhoto} resizeMode="cover" />
+                <Image source={photos[programmeViewPhoto(view)]} style={styles.programmePhoto} resizeMode="cover" />
                 <View style={styles.programmeShade} />
                 <View style={styles.programmeText}>
-                  <Text style={hq.eyebrow}>{isCurrent ? "YOUR PROGRAMME" : "PROGRAMME"}</Text>
+                  <Text style={hq.eyebrow}>{isCoachPlan(view) ? "FROM YOUR COACH" : isCurrent ? "YOUR PROGRAMME" : "PROGRAMME"}</Text>
                   <Text style={styles.programmeTitle}>{view.programme.title}</Text>
                   {view.programme.tagline ? <Text style={styles.programmeTagline}>{view.programme.tagline}</Text> : null}
                 </View>

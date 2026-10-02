@@ -480,6 +480,10 @@ async function registerAccountHandler(req: Request, res: Response) {
   let invite: { id: string } | null = null;
   const isCoachAdmin = request.role === "coach" && coachAdminEmailHashes(hashEmail).has(emailHash);
   if (request.role === "coach" && !isCoachAdmin) {
+    if (!request.inviteCode) {
+      res.status(422).json({ error: "Enter your coach invite code. Coach accounts are by invitation." });
+      return;
+    }
     invite = request.inviteCode
       ? await prisma.coachInvite.findFirst({
           where: { codeHash: hashPairingCode(normaliseCode(request.inviteCode)), usedAt: null, expiresAt: { gt: new Date() } },

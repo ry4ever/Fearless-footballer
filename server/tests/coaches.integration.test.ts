@@ -60,7 +60,8 @@ describe("Coaches", () => {
   const sessionIds: string[] = [];
 
   beforeAll(async () => {
-    process.env.COACH_ADMIN_EMAILS = ` other@example.test , ${adminEmail.toUpperCase()} `;
+    // Typed the way people paste lists: quotes, semicolons and spaces.
+    process.env.COACH_ADMIN_EMAILS = ` "other@example.test"; '${adminEmail.toUpperCase()}' `;
     await new Promise<void>((resolve) => {
       server = app.listen(0, () => {
         const addr = server.address();
@@ -100,7 +101,11 @@ describe("Coaches", () => {
     "invite-only sign-up, parent-approved squad link, progress-only view and a coach's plan",
     async () => {
       // Coach accounts need a valid invite, and each invite works once.
-      expect((await register("coach", "No Invite Coach")).status).toBe(422);
+      const noCode = await register("coach", "No Invite Coach");
+      expect(noCode.status).toBe(422);
+      expect(noCode.body.error).toMatch(/Enter your coach invite code/);
+      const wrongCode = await register("coach", "Wrong Code Coach", { inviteCode: "COACH-WRONG12345" });
+      expect(wrongCode.body.error).toMatch(/isn't valid/);
       const invite = await createCoachInvite(prisma, { note: "Test coach" });
       const coach = await register("coach", "Coach Carter", { inviteCode: invite.code.toLowerCase() });
       expect(coach.status).toBe(201);

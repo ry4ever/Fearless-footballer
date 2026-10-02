@@ -1,10 +1,10 @@
 import { useState } from "react";
 import { Image, Pressable, Text, View } from "react-native";
 import { Redirect, useRouter } from "expo-router";
-import { programmePhoto } from "../../../shared/onboarding";
-import { sessionPhoto } from "../../../shared/player";
+import { programmeViewPhoto, sessionPhoto } from "../../../shared/player";
 import {
   currentProgramme,
+  isCoachPlan,
   firstName,
   greetingFor,
   lastSevenDayLabels,
@@ -156,10 +156,16 @@ function AthleteHomeContent() {
       {programme ? (
         <View style={hq.card} testID="your-programme">
           <View style={hq.row}>
-            <Text style={hq.eyebrow}>YOUR PROGRAMME</Text>
-            <Pressable accessibilityRole="button" onPress={() => router.replace("/athlete/training")} hitSlop={8}>
-              <Text style={hq.link}>Change →</Text>
-            </Pressable>
+            <Text style={hq.eyebrow}>{isCoachPlan(programme) ? "FROM YOUR COACH" : "YOUR PROGRAMME"}</Text>
+            {isCoachPlan(programme) ? (
+              <Pressable accessibilityRole="button" onPress={() => router.push(`/athlete/programme/${programme.programme.slug}`)} hitSlop={8}>
+                <Text style={hq.link}>See plan →</Text>
+              </Pressable>
+            ) : (
+              <Pressable accessibilityRole="button" onPress={() => router.replace("/athlete/training")} hitSlop={8}>
+                <Text style={hq.link}>Change →</Text>
+              </Pressable>
+            )}
           </View>
           <Pressable
             accessibilityRole="button"
@@ -169,7 +175,7 @@ function AthleteHomeContent() {
             testID={`programme-${programme.programme.slug}`}
           >
             <View style={hq.banner}>
-              <Image source={photos[programmePhoto(programme.programme.slug)]} style={hq.bannerPhoto} resizeMode="cover" />
+              <Image source={photos[programmeViewPhoto(programme)]} style={hq.bannerPhoto} resizeMode="cover" />
               <View style={hq.bannerShade} />
               <Text style={hq.bannerTitle}>{programme.programme.title}</Text>
             </View>

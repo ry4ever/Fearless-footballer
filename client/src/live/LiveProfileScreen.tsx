@@ -2,6 +2,7 @@ import { useState } from "react";
 import { FearlessWordmark } from "../components/icons/CustomIcons";
 import { apiClient } from "../lib/apiClient";
 import { AccountActions } from "./AccountActions";
+import { AthleteCoachCard } from "./AthleteCoachCard";
 import { loadPlan } from "./plan";
 import { isLinkActive, useSession } from "./session";
 
@@ -55,6 +56,8 @@ export function LiveProfileScreen({ onEditPlan }: LiveProfileScreenProps) {
           {plan ? "Change my plan" : "Set my plan"}
         </button>
       </section>
+
+      <AthleteCoachCard />
 
       <section className="live-card" aria-label="Parent or guardian access">
         <span className="eyebrow">PARENT OR GUARDIAN</span>

@@ -7,6 +7,7 @@ import { loadPlan } from "./plan";
 import { useSession } from "./session";
 import {
   currentProgramme,
+  isCoachPlan,
   lastSevenDayLabels,
   nextSession,
   programmePhoto,
@@ -150,10 +151,16 @@ export function LiveHQScreen({ onStartSession, onOpenTab, onOpenProgramme }: Liv
       {programme && (
         <section className="hq2-card hq2-programmes" aria-label="Your programme">
           <div className="hq2-row">
-            <span className="hq2-eyebrow">YOUR PROGRAMME</span>
-            <button type="button" className="hq2-link" onClick={() => onOpenTab("training")}>
-              Change →
-            </button>
+            <span className="hq2-eyebrow">{isCoachPlan(programme) ? "FROM YOUR COACH" : "YOUR PROGRAMME"}</span>
+            {isCoachPlan(programme) ? (
+              <button type="button" className="hq2-link" onClick={() => onOpenProgramme(programme.programme.slug)}>
+                See plan →
+              </button>
+            ) : (
+              <button type="button" className="hq2-link" onClick={() => onOpenTab("training")}>
+                Change →
+              </button>
+            )}
           </div>
           <button
             type="button"
@@ -162,7 +169,7 @@ export function LiveHQScreen({ onStartSession, onOpenTab, onOpenProgramme }: Liv
             aria-label={`${programme.programme.title}. Open the programme`}
           >
             <span className="hq2-programme-photo">
-              <img src={programmePhoto(programme.programme.slug)} alt="" />
+              <img src={programmePhoto(programme)} alt="" />
               <strong>{programme.programme.title}</strong>
             </span>
             {programme.programme.tagline && <span className="hq2-programme-tagline">{programme.programme.tagline}</span>}

@@ -26,6 +26,7 @@
     "test:coverage": "vitest run -c vitest.coverage.config.ts --coverage",
     "test:watch": "vitest",
     "verify": "tsx scripts/verifyProductionReadiness.ts",
+    "coach:invite": "tsx --env-file=.env scripts/createCoachInvite.ts",
     "content:upload": "tsx --env-file=.env scripts/uploadContent.ts",
     "content:measure": "tsx scripts/uploadContent.ts --dry-run"
   },

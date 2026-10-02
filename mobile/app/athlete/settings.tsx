@@ -11,6 +11,7 @@ import { AthleteAccountGuard, useSession } from "../../src/session";
 import { Button, PrivacyNotice, Screen, StatusCard, Wordmark } from "../../src/ui";
 import { hq } from "../../src/ui/hqStyles";
 import { TabBar } from "../../src/ui/TabBar";
+import { AthleteCoachCard } from "../../src/ui/CoachCards";
 
 function AthleteSettingsContent() {
   const router = useRouter();
@@ -116,6 +117,7 @@ function AthleteSettingsContent() {
           accessibilityLabel="Change your training plan"
         />
       </View>
+      {hasAccess ? <AthleteCoachCard /> : null}
       <Button
         label={pairingPending ? "Review pairing" : pairingActive ? "Manage caregiver link" : "Pair with a parent or guardian"}
         variant="secondary"

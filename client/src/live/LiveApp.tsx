@@ -3,6 +3,7 @@ import type { SessionPackage } from "@shared/types";
 import { OnboardingScreen } from "../screens/OnboardingScreen";
 import { AthleteLinkScreen } from "./AthleteLinkScreen";
 import { AuthScreen } from "./AuthScreen";
+import { CoachApp } from "./CoachApp";
 import { CaregiverLinkScreen } from "./CaregiverLinkScreen";
 import { LiveCompleteScreen } from "./LiveCompleteScreen";
 import { LiveHQScreen } from "./LiveHQScreen";
@@ -99,6 +100,8 @@ function AthleteApp() {
 function LiveRoutes() {
   const { user, pairing } = useSession();
   if (!user) return <AuthScreen />;
+  // Coaches don't have a parent link; their access is per player.
+  if (user.role === "coach") return <CoachApp />;
   if (pairing === undefined) return <Loading />;
 
   if (user.role === "caregiver") {

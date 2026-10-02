@@ -5,7 +5,7 @@ import { AthleteHeader } from "./AthleteHeader";
 import { LoadState, PendingNote } from "./LiveHQScreen";
 import { loadPlan } from "./plan";
 import { useSession } from "./session";
-import { currentProgramme, programmePhoto, programmeViews, useAthleteData } from "./useAthleteData";
+import { currentProgramme, isCoachPlan, programmePhoto, programmeViews, useAthleteData } from "./useAthleteData";
 
 interface LiveTrainingScreenProps {
   onStartSession: (session: SessionPackage) => void;
@@ -101,9 +101,11 @@ export function LiveTrainingScreen({ onStartSession, onOpenProgramme, onOpenAcco
               onClick={() => onOpenProgramme(view.programme.slug)}
               aria-label={`${view.programme.title}${view === current ? ", your programme" : ""}. Open the programme`}
             >
-              <img src={programmePhoto(view.programme.slug)} alt="" />
+              <img src={programmePhoto(view)} alt="" />
               <span className="tr-programme-text">
-                <span className="hq2-eyebrow">{view === current ? "YOUR PROGRAMME" : "PROGRAMME"}</span>
+                <span className="hq2-eyebrow">
+                  {isCoachPlan(view) ? "FROM YOUR COACH" : view === current ? "YOUR PROGRAMME" : "PROGRAMME"}
+                </span>
                 <strong>{view.programme.title}</strong>
                 {view.programme.tagline && <small>{view.programme.tagline}</small>}
               </span>

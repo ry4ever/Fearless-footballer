@@ -20,6 +20,7 @@ model AthleteProfile {
   user           User             @relation(fields: [userId], references: [id], onDelete: Cascade)
   caregiverLinks CaregiverLink[]
   metricSnapshots MetricSnapshot[]
+  coachLinks     CoachLink[]
 }
 
 model AuditLog {
@@ -234,6 +235,7 @@ model User {
   caregiverLinks        CaregiverLink[]
   sessionCompletions    SessionCompleted[]
   betaFeedbacks         BetaFeedback[]
+  coachProfile          CoachProfile?
 
   @@index([emailHash])
   @@index([email])
@@ -299,4 +301,60 @@ enum UserRole {
   ATHLETE
   CAREGIVER
   MENTOR_ADMIN
+  COACH
+}
+/// Single-use code Mark (an admin) hands to a coach so they can create a
+/// coach account. Coaches can't sign up without one.
+model CoachInvite {
+  id          String    @id @default(cuid())
+  codeHash    String    @unique
+  createdById String?
+  /// Who the invite is for, as a reminder (e.g. a coach's name). Not shown to athletes.
+  note        String?
+  expiresAt   DateTime
+  usedAt      DateTime?
+  usedById    String?
+  createdAt   DateTime  @default(now())
+}
+
+model CoachProfile {
+  id        String      @id @default(cuid())
+  userId    String      @unique
+  /// Shared with players so they can ask to join this coach's squad.
+  squadCode String      @unique
+  createdAt DateTime    @default(now())
+  user      User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  links     CoachLink[]
+}
+
+enum CoachLinkStatus {
+  /// The athlete entered the squad code; waiting for their parent or guardian.
+  PENDING_PARENT
+  ACTIVE
+  DECLINED
+  REVOKED
+}
+
+/// A coach's access to one athlete. The coach sees progress only (never
+/// reflections) and only while ACTIVE, which needs the parent's approval.
+model CoachLink {
+  id                String          @id @default(cuid())
+  coachId           String
+  athleteId         String
+  status            CoachLinkStatus @default(PENDING_PARENT)
+  requestedAt       DateTime        @default(now())
+  parentDecidedAt   DateTime?
+  parentDeciderId   String?
+  revokedAt         DateTime?
+  revokedById       String?
+  /// The coach's plan for this athlete: session ids in order.
+  planSessionIds    String[]        @default([])
+  planUpdatedAt     DateTime?
+  createdAt         DateTime        @default(now())
+  updatedAt         DateTime        @updatedAt
+  coach             CoachProfile    @relation(fields: [coachId], references: [id], onDelete: Cascade)
+  athlete           AthleteProfile  @relation(fields: [athleteId], references: [id], onDelete: Cascade)
+
+  @@unique([coachId, athleteId])
+  @@index([athleteId, status])
 }

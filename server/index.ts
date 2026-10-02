@@ -19,6 +19,7 @@ import {
   hashResetToken,
 } from "./lib/pii";
 import { sanitizeAuditDetails } from "./lib/audit";
+import { createCoachInvite, normaliseCode, uniqueSquadCode } from "./lib/coachInvites";
 import { monitoring } from "./lib/monitoring";
 import { generateSignedMediaUrl } from "./lib/cdn";
 import { computeAthleteMetrics, consecutiveTrainingWeeks, localDayKey, type CompletionRecord } from "./lib/metrics";
@@ -28,6 +29,8 @@ import {
   type AuthTokenSet,
   type BetaUserRole,
   type CaregiverDashboardPayload,
+  type CoachAthleteDetail,
+  type CoachSquadResponse,
   type OfflineQueueStatus,
   type PairingLink,
   type PairingStatusResponse,
@@ -91,7 +94,9 @@ const displayNameSchema = z
   .max(100, "Name must be 100 characters or fewer");
 
 const registerAccountSchema = z.object({
-  role: z.enum(["athlete", "caregiver"]),
+  role: z.enum(["athlete", "caregiver", "coach"]),
+  /** Coaches can only sign up with an invite code from Mark. */
+  inviteCode: z.string().trim().min(6).max(40).optional(),
   fullName: displayNameSchema.optional(),
   displayName: displayNameSchema.optional(),
   email: emailSchema,
@@ -103,7 +108,7 @@ const registerAccountSchema = z.object({
 });
 
 const signInAccountSchema = z.object({
-  role: z.enum(["athlete", "caregiver"]),
+  role: z.enum(["athlete", "caregiver", "coach"]),
   email: emailSchema,
   password: z.string().min(1).max(128),
 });
@@ -227,17 +232,19 @@ async function authenticate(req: Request, res: Response, next: NextFunction) {
     // The role always comes from the database, never from the token claim.
     req.auth = {
       userId: payload.sub,
-      role:
-        user.role === "MENTOR_ADMIN"
-          ? "mentor_admin"
-          : user.role === "CAREGIVER"
-            ? "caregiver"
-            : "athlete",
+      role: user.role === "MENTOR_ADMIN" ? "mentor_admin" : accountRole(user.role),
     };
     next();
   } catch {
     res.status(401).json({ error: "Invalid or expired token" });
   }
+}
+
+/** The app-facing role for a stored one (admins sign in through other routes). */
+function accountRole(role: string): BetaUserRole {
+  if (role === "CAREGIVER") return "caregiver";
+  if (role === "COACH") return "coach";
+  return "athlete";
 }
 
 function requireRole(role: AuthContext["role"]) {
@@ -294,6 +301,13 @@ function generatePairingCode(): string {
   }
   return `FEAR-${code}`;
 }
+
+const COACH_STATUS = {
+  PENDING_PARENT: "pending_parent",
+  ACTIVE: "active",
+  DECLINED: "declined",
+  REVOKED: "revoked",
+} as const;
 
 // =============================================================================
 // Metrics calculation (deterministic, timezone-aware)
@@ -462,8 +476,22 @@ async function registerAccountHandler(req: Request, res: Response) {
     return;
   }
 
+  let invite: { id: string } | null = null;
+  if (request.role === "coach") {
+    invite = request.inviteCode
+      ? await prisma.coachInvite.findFirst({
+          where: { codeHash: hashPairingCode(normaliseCode(request.inviteCode)), usedAt: null, expiresAt: { gt: new Date() } },
+          select: { id: true },
+        })
+      : null;
+    if (!invite) {
+      res.status(422).json({ error: "That coach invite code isn't valid. Ask Mark for a new one." });
+      return;
+    }
+  }
+
   const passwordHash = await bcrypt.hash(request.password, 12);
-  const role = request.role === "athlete" ? "ATHLETE" : "CAREGIVER";
+  const role = request.role === "athlete" ? "ATHLETE" : request.role === "coach" ? "COACH" : "CAREGIVER";
   const fullName = request.fullName ?? request.displayName ?? request.email;
   const user = await prisma.user.create({
     data: {
@@ -486,6 +514,21 @@ async function registerAccountHandler(req: Request, res: Response) {
       data: {
         userId: user.id,
       },
+    });
+  }
+  if (request.role === "coach" && invite) {
+    const usedInvite = invite;
+    await prisma.$transaction(async (tx) => {
+      // Single use: a second sign-up racing on the same code fails here.
+      const claimed = await tx.coachInvite.updateMany({
+        where: { id: usedInvite.id, usedAt: null },
+        data: { usedAt: new Date(), usedById: user.id },
+      });
+      if (claimed.count !== 1) throw new Error("Coach invite already used");
+      await tx.coachProfile.create({ data: { userId: user.id, squadCode: await uniqueSquadCode(tx) } });
+    }).catch(async (error) => {
+      await prisma.user.delete({ where: { id: user.id } });
+      throw error;
     });
   }
 
@@ -565,7 +608,7 @@ async function signInAccountHandler(req: Request, res: Response) {
     data: { failedAttempts: 0, lockedUntil: null },
   });
 
-  const role = user.role === "CAREGIVER" ? "caregiver" : "athlete";
+  const role = accountRole(user.role);
   const tokens: AuthTokenSet = {
     accessToken: createAccessToken(user.id, role),
     refreshToken: createRefreshToken(user.id, role, user.refreshVersion),
@@ -1065,7 +1108,7 @@ async function refreshTokenHandler(req: Request, res: Response) {
 
   if (
     typeof payload.sub !== "string" ||
-    (payload.role !== "athlete" && payload.role !== "caregiver") ||
+    (payload.role !== "athlete" && payload.role !== "caregiver" && payload.role !== "coach") ||
     typeof payload.refreshVersion !== "number"
   ) {
     res.status(401).json({ error: "Invalid refresh token" });
@@ -1080,7 +1123,8 @@ async function refreshTokenHandler(req: Request, res: Response) {
     !user ||
     user.refreshVersion !== payload.refreshVersion ||
     (payload.role === "athlete" && user.role !== "ATHLETE") ||
-    (payload.role === "caregiver" && user.role !== "CAREGIVER")
+    (payload.role === "caregiver" && user.role !== "CAREGIVER") ||
+    (payload.role === "coach" && user.role !== "COACH")
   ) {
     res.status(401).json({ error: "Invalid or expired refresh token" });
     return;
@@ -1107,7 +1151,7 @@ async function refreshTokenHandler(req: Request, res: Response) {
     return;
   }
 
-  const role: BetaUserRole = rotatedUser.role === "CAREGIVER" ? "caregiver" : "athlete";
+  const role: BetaUserRole = accountRole(rotatedUser.role);
   const tokens: AuthTokenSet = {
     accessToken: createAccessToken(rotatedUser.id, role),
     refreshToken: createRefreshToken(rotatedUser.id, role, rotatedUser.refreshVersion),
@@ -1187,7 +1231,7 @@ async function getSessionLibraryHandler(req: Request, res: Response) {
     return;
   }
 
-  const [sessions, programmes] = await Promise.all([
+  const [sessions, programmes, coachLink] = await Promise.all([
     prisma.session.findMany({
       where: { OR: [{ isPublished: true }, { comingSoon: true }] },
       orderBy: [{ comingSoon: "asc" }, { sortOrder: "asc" }, { title: "asc" }],
@@ -1198,7 +1242,14 @@ async function getSessionLibraryHandler(req: Request, res: Response) {
       orderBy: { sortOrder: "asc" },
       include: { sessions: { orderBy: { position: "asc" }, select: { sessionId: true } } },
     }),
+    prisma.coachLink.findFirst({
+      where: { athleteId: athlete.id, status: "ACTIVE" },
+      include: { coach: { include: { user: { select: { fullName: true } } } } },
+      orderBy: { updatedAt: "desc" },
+    }),
   ]);
+  const playableIds = new Set(sessions.filter((session) => !session.comingSoon).map((session) => session.id));
+  const coachSessionIds = (coachLink?.planSessionIds ?? []).filter((id) => playableIds.has(id));
 
   const body: SessionLibraryResponse = {
     sessions: sessions.map(toSessionPackage),
@@ -1211,6 +1262,15 @@ async function getSessionLibraryHandler(req: Request, res: Response) {
       description: programme.description,
       sessionIds: programme.sessions.map((member) => member.sessionId),
     })),
+    ...(coachLink && coachSessionIds.length > 0
+      ? {
+          coachPlan: {
+            coachName: decryptPII(coachLink.coach.user.fullName),
+            sessionIds: coachSessionIds,
+            updatedAt: (coachLink.planUpdatedAt ?? coachLink.updatedAt).toISOString(),
+          },
+        }
+      : {}),
   };
   res.json(body);
 }
@@ -1588,6 +1648,40 @@ async function getCaregiverDashboardHandler(req: Request, res: Response) {
   res.json(dashboard);
 }
 
+/** Sessions done, weeks in a row and areas worked on: what Progress and coaches see. */
+async function trainingSummary(userId: string, timezone: string, now: Date) {
+  const completions = await prisma.sessionCompleted.findMany({
+    where: { userId },
+    select: { sessionId: true, completedAt: true, session: { select: { focusArea: true } } },
+  });
+  const todayKey = localDayKey(now, timezone);
+  const areaCounts = new Map<string, number>();
+  for (const completion of completions) {
+    const area = completion.session.focusArea ?? "Other sessions";
+    areaCounts.set(area, (areaCounts.get(area) ?? 0) + 1);
+  }
+  return {
+    completedSessionIds: Array.from(new Set(completions.map((completion) => completion.sessionId))),
+    completedTodaySessionIds: Array.from(
+      new Set(
+        completions
+          .filter((completion) => localDayKey(completion.completedAt, timezone) === todayKey)
+          .map((completion) => completion.sessionId),
+      ),
+    ),
+    totalCompletions: completions.length,
+    consecutiveWeeks: consecutiveTrainingWeeks(
+      completions.map((completion) => completion.completedAt),
+      timezone,
+      now,
+    ),
+    // Most-trained first.
+    completionsByArea: Array.from(areaCounts, ([area, count]) => ({ area, count })).sort(
+      (a, b) => b.count - a.count || a.area.localeCompare(b.area),
+    ),
+  };
+}
+
 async function getAthleteProgressHandler(req: Request, res: Response) {
   if (!req.auth) {
     res.status(401).json({ error: "Authentication required" });
@@ -1629,29 +1723,7 @@ async function getAthleteProgressHandler(req: Request, res: Response) {
       }
     : { title: "No completed reps", duration: "", completedAt: "", completedToday: false };
 
-  const completions = await prisma.sessionCompleted.findMany({
-    where: { userId: metrics.athlete.userId },
-    select: { sessionId: true, completedAt: true, session: { select: { focusArea: true } } },
-  });
-  const todayKey = localDayKey(now, metrics.timezone);
-  const completedSessionIds = Array.from(new Set(completions.map((completion) => completion.sessionId)));
-  const completedTodaySessionIds = Array.from(
-    new Set(
-      completions
-        .filter((completion) => localDayKey(completion.completedAt, metrics.timezone) === todayKey)
-        .map((completion) => completion.sessionId),
-    ),
-  );
-
-  // Sessions completed per focus area, most-trained first.
-  const areaCounts = new Map<string, number>();
-  for (const completion of completions) {
-    const area = completion.session.focusArea ?? "Other sessions";
-    areaCounts.set(area, (areaCounts.get(area) ?? 0) + 1);
-  }
-  const completionsByArea = Array.from(areaCounts, ([area, count]) => ({ area, count })).sort(
-    (a, b) => b.count - a.count || a.area.localeCompare(b.area),
-  );
+  const training = await trainingSummary(metrics.athlete.userId, metrics.timezone, now);
 
   const progress: AthleteProgress = {
     athleteId: metrics.athlete.userId,
@@ -1664,15 +1736,11 @@ async function getAthleteProgressHandler(req: Request, res: Response) {
     weeklyCompletedDays: metrics.completedDays,
     sevenDayPattern: metrics.sevenDayPattern,
     lastRep,
-    completedSessionIds,
-    completedTodaySessionIds,
-    totalCompletions: completions.length,
-    consecutiveWeeks: consecutiveTrainingWeeks(
-      completions.map((completion) => completion.completedAt),
-      metrics.timezone,
-      now,
-    ),
-    completionsByArea,
+    completedSessionIds: training.completedSessionIds,
+    completedTodaySessionIds: training.completedTodaySessionIds,
+    totalCompletions: training.totalCompletions,
+    consecutiveWeeks: training.consecutiveWeeks,
+    completionsByArea: training.completionsByArea,
     moodTrend: {
       status: "Steady",
       subtitle: "A private post-rep check-in was completed.",
@@ -2112,6 +2180,361 @@ async function getBetaDashboardHandler(req: Request, res: Response) {
 }
 
 // =============================================================================
+// Coaches
+//
+// A coach (invite-only) shares a squad code. An athlete enters it, their
+// parent or guardian approves, and only then can the coach see the athlete's
+// training progress – never reflections – and set a plan of sessions.
+// =============================================================================
+
+const squadJoinSchema = z.object({ squadCode: z.string().trim().min(4).max(20) });
+const coachDecisionSchema = z.object({ approved: z.boolean() });
+const coachPlanSchema = z.object({ sessionIds: z.array(z.string().min(1)).max(30) });
+const coachInviteSchema = z.object({ note: z.string().trim().max(120).optional(), days: z.number().int().min(1).max(90).optional() });
+
+async function audit(req: Request, action: string, entityType: string, entityId: string) {
+  await prisma.auditLog.create({
+    data: {
+      userId: req.auth?.userId,
+      action,
+      entityType,
+      entityId,
+      ipAddress: req.ip,
+      userAgent: req.header("user-agent"),
+      details: sanitizeAuditDetails({}),
+    },
+  });
+}
+
+/** Admin (Mark): create a single-use invite code for a new coach. */
+async function adminCreateCoachInviteHandler(req: Request, res: Response) {
+  const parsed = coachInviteSchema.safeParse(req.body ?? {});
+  if (!parsed.success) {
+    res.status(422).json({ error: "Invalid invite request" });
+    return;
+  }
+  const invite = await createCoachInvite(prisma, { createdById: req.auth!.userId, ...parsed.data });
+  await audit(req, "COACH_INVITE", "COACH_INVITE", invite.code.slice(0, 6));
+  res.status(201).json({ inviteCode: invite.code, expiresAt: invite.expiresAt.toISOString() });
+}
+
+/** Athlete: their coach link, if any (pending or active). */
+async function getAthleteCoachHandler(req: Request, res: Response) {
+  const athlete = await prisma.athleteProfile.findUnique({ where: { userId: req.auth!.userId } });
+  if (!athlete) {
+    res.status(404).json({ error: "Athlete profile not found" });
+    return;
+  }
+  const link = await prisma.coachLink.findFirst({
+    where: { athleteId: athlete.id, status: { in: ["PENDING_PARENT", "ACTIVE"] } },
+    include: { coach: { include: { user: { select: { fullName: true } } } } },
+    orderBy: { requestedAt: "desc" },
+  });
+  res.json({
+    coach: link
+      ? {
+          id: link.id,
+          coachName: decryptPII(link.coach.user.fullName),
+          status: COACH_STATUS[link.status],
+          requestedAt: link.requestedAt.toISOString(),
+        }
+      : null,
+  });
+}
+
+/** Athlete: ask to join a coach's squad. Needs a parent's approval next. */
+async function joinSquadHandler(req: Request, res: Response) {
+  const parsed = squadJoinSchema.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(422).json({ error: "Enter your coach's squad code" });
+    return;
+  }
+  const athlete = await prisma.athleteProfile.findUnique({ where: { userId: req.auth!.userId } });
+  if (!athlete) {
+    res.status(404).json({ error: "Athlete profile not found" });
+    return;
+  }
+  const coach = await prisma.coachProfile.findUnique({
+    where: { squadCode: normaliseCode(parsed.data.squadCode) },
+    include: { user: { select: { fullName: true } } },
+  });
+  if (!coach) {
+    res.status(404).json({ error: "That squad code isn't recognised" });
+    return;
+  }
+  const current = await prisma.coachLink.findFirst({
+    where: { athleteId: athlete.id, status: { in: ["PENDING_PARENT", "ACTIVE"] } },
+  });
+  if (current) {
+    res.status(409).json({ error: "You already have a coach. Remove them first to join a different squad." });
+    return;
+  }
+  // Re-joining after a decline or removal starts a fresh request.
+  const link = await prisma.coachLink.upsert({
+    where: { coachId_athleteId: { coachId: coach.id, athleteId: athlete.id } },
+    update: {
+      status: "PENDING_PARENT",
+      requestedAt: new Date(),
+      parentDecidedAt: null,
+      parentDeciderId: null,
+      revokedAt: null,
+      revokedById: null,
+    },
+    create: { coachId: coach.id, athleteId: athlete.id },
+  });
+  await audit(req, "COACH_JOIN_REQUEST", "COACH_LINK", link.id);
+  res.status(201).json({
+    coach: {
+      id: link.id,
+      coachName: decryptPII(coach.user.fullName),
+      status: COACH_STATUS[link.status],
+      requestedAt: link.requestedAt.toISOString(),
+    },
+  });
+}
+
+/** Athlete: leave their coach (or cancel a pending request). */
+async function leaveCoachHandler(req: Request, res: Response) {
+  const athlete = await prisma.athleteProfile.findUnique({ where: { userId: req.auth!.userId } });
+  const result = athlete
+    ? await prisma.coachLink.updateMany({
+        where: { id: String(req.params.linkId), athleteId: athlete.id, status: { in: ["PENDING_PARENT", "ACTIVE"] } },
+        data: { status: "REVOKED", revokedAt: new Date(), revokedById: req.auth!.userId },
+      })
+    : { count: 0 };
+  if (result.count === 0) {
+    res.status(404).json({ error: "Coach link not found" });
+    return;
+  }
+  await audit(req, "COACH_LINK_REVOKE", "COACH_LINK", String(req.params.linkId));
+  res.status(204).end();
+}
+
+/** Athletes this caregiver is actively linked to (with consent). */
+async function caregiverAthleteIds(caregiverUserId: string): Promise<string[]> {
+  const links = await prisma.caregiverLink.findMany({
+    where: {
+      caregiverUserId,
+      status: "ACTIVE",
+      coppaConsent: true,
+      consentedAt: { not: null },
+      consentRevokedAt: null,
+      athleteApprovedAt: { not: null },
+    },
+    select: { athleteId: true },
+  });
+  return links.map((link) => link.athleteId);
+}
+
+/** Parent or guardian: coach requests and links for their athletes. */
+async function getCaregiverCoachLinksHandler(req: Request, res: Response) {
+  const athleteIds = await caregiverAthleteIds(req.auth!.userId);
+  const links = await prisma.coachLink.findMany({
+    where: { athleteId: { in: athleteIds }, status: { in: ["PENDING_PARENT", "ACTIVE"] } },
+    include: {
+      coach: { include: { user: { select: { fullName: true } } } },
+      athlete: { include: { user: { select: { fullName: true } } } },
+    },
+    orderBy: { requestedAt: "desc" },
+  });
+  res.json({
+    coaches: links.map((link) => ({
+      id: link.id,
+      coachName: decryptPII(link.coach.user.fullName),
+      athleteName: decryptPII(link.athlete.user.fullName),
+      status: COACH_STATUS[link.status],
+      requestedAt: link.requestedAt.toISOString(),
+    })),
+  });
+}
+
+/** Parent or guardian: approve or decline a pending coach request. */
+async function decideCoachRequestHandler(req: Request, res: Response) {
+  const parsed = coachDecisionSchema.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(422).json({ error: "Invalid decision" });
+    return;
+  }
+  const athleteIds = await caregiverAthleteIds(req.auth!.userId);
+  const result = await prisma.coachLink.updateMany({
+    where: { id: String(req.params.linkId), athleteId: { in: athleteIds }, status: "PENDING_PARENT" },
+    data: {
+      status: parsed.data.approved ? "ACTIVE" : "DECLINED",
+      parentDecidedAt: new Date(),
+      parentDeciderId: req.auth!.userId,
+    },
+  });
+  if (result.count === 0) {
+    res.status(404).json({ error: "Coach request not found" });
+    return;
+  }
+  await audit(req, parsed.data.approved ? "COACH_LINK_APPROVE" : "COACH_LINK_DECLINE", "COACH_LINK", String(req.params.linkId));
+  res.json({ status: parsed.data.approved ? "active" : "declined" });
+}
+
+/** Parent or guardian: remove a coach's access. */
+async function caregiverRemoveCoachHandler(req: Request, res: Response) {
+  const athleteIds = await caregiverAthleteIds(req.auth!.userId);
+  const result = await prisma.coachLink.updateMany({
+    where: { id: String(req.params.linkId), athleteId: { in: athleteIds }, status: { in: ["PENDING_PARENT", "ACTIVE"] } },
+    data: { status: "REVOKED", revokedAt: new Date(), revokedById: req.auth!.userId },
+  });
+  if (result.count === 0) {
+    res.status(404).json({ error: "Coach link not found" });
+    return;
+  }
+  await audit(req, "COACH_LINK_REVOKE", "COACH_LINK", String(req.params.linkId));
+  res.status(204).end();
+}
+
+async function coachProfileFor(userId: string) {
+  return prisma.coachProfile.findUnique({ where: { userId }, include: { user: { select: { fullName: true } } } });
+}
+
+/** Coach: squad code and the athletes who've joined or asked to. */
+async function getCoachSquadHandler(req: Request, res: Response) {
+  const coach = await coachProfileFor(req.auth!.userId);
+  if (!coach) {
+    res.status(404).json({ error: "Coach profile not found" });
+    return;
+  }
+  const links = await prisma.coachLink.findMany({
+    where: { coachId: coach.id, status: { in: ["PENDING_PARENT", "ACTIVE"] } },
+    include: { athlete: { include: { user: { select: { id: true, fullName: true } } } } },
+    orderBy: { requestedAt: "desc" },
+  });
+  const activeUserIds = links.filter((link) => link.status === "ACTIVE").map((link) => link.athlete.user.id);
+  const stats = await prisma.sessionCompleted.groupBy({
+    by: ["userId"],
+    where: { userId: { in: activeUserIds } },
+    _count: { _all: true },
+    _max: { completedAt: true },
+  });
+  const statsByUser = new Map(stats.map((row) => [row.userId, row]));
+  const body: CoachSquadResponse = {
+    coachName: decryptPII(coach.user.fullName),
+    squadCode: coach.squadCode,
+    athletes: links.map((link) => {
+      const row = link.status === "ACTIVE" ? statsByUser.get(link.athlete.user.id) : undefined;
+      return {
+        linkId: link.id,
+        athleteName: decryptPII(link.athlete.user.fullName),
+        status: COACH_STATUS[link.status],
+        requestedAt: link.requestedAt.toISOString(),
+        ...(link.status === "ACTIVE" ? { totalCompletions: row?._count._all ?? 0 } : {}),
+        ...(row?._max.completedAt ? { lastSessionAt: row._max.completedAt.toISOString() } : {}),
+        hasPlan: link.planSessionIds.length > 0,
+      };
+    }),
+  };
+  res.json(body);
+}
+
+/** An ACTIVE link belonging to this coach, with the athlete's user. */
+async function activeCoachLink(coachUserId: string, linkId: string) {
+  return prisma.coachLink.findFirst({
+    where: { id: linkId, status: "ACTIVE", coach: { userId: coachUserId } },
+    include: { athlete: { include: { user: { select: { id: true, fullName: true, timezone: true } } } } },
+  });
+}
+
+/** Coach: one athlete's training progress (no reflections) and their plan. */
+async function getCoachAthleteHandler(req: Request, res: Response) {
+  const link = await activeCoachLink(req.auth!.userId, String(req.params.linkId));
+  if (!link) {
+    res.status(404).json({ error: "Athlete not found in your squad" });
+    return;
+  }
+  const now = new Date();
+  const athleteUserId = link.athlete.user.id;
+  const [metrics, training, last, sessions] = await Promise.all([
+    calculateMetrics(athleteUserId, now),
+    trainingSummary(athleteUserId, link.athlete.user.timezone, now),
+    prisma.sessionCompleted.findFirst({
+      where: { userId: athleteUserId },
+      orderBy: { completedAt: "desc" },
+      select: { completedAt: true, session: { select: { title: true } } },
+    }),
+    prisma.session.findMany({
+      where: { isPublished: true, comingSoon: false },
+      orderBy: [{ sortOrder: "asc" }, { title: "asc" }],
+      select: { id: true, title: true, focusArea: true, tagline: true },
+    }),
+  ]);
+  const body: CoachAthleteDetail = {
+    linkId: link.id,
+    athleteName: decryptPII(link.athlete.user.fullName),
+    progress: {
+      totalCompletions: training.totalCompletions,
+      consecutiveWeeks: training.consecutiveWeeks,
+      completionsByArea: training.completionsByArea,
+      currentStreakDays: metrics?.currentStreak ?? 0,
+      bestStreakDays: metrics?.bestStreak ?? 0,
+      weeklyCompletedDays: metrics?.completedDays ?? 0,
+      sevenDayPattern: metrics?.sevenDayPattern ?? Array(7).fill(false),
+      ...(last ? { lastSession: { title: last.session.title, completedAt: last.completedAt.toISOString() } } : {}),
+    },
+    plan: {
+      sessionIds: link.planSessionIds,
+      ...(link.planUpdatedAt ? { updatedAt: link.planUpdatedAt.toISOString() } : {}),
+    },
+    sessions: sessions.map((session) => ({
+      id: session.id,
+      title: session.title,
+      focusArea: session.focusArea ?? undefined,
+      tagline: session.tagline ?? undefined,
+    })),
+  };
+  res.json(body);
+}
+
+/** Coach: set the athlete's plan – sessions in order (empty clears it). */
+async function setCoachPlanHandler(req: Request, res: Response) {
+  const parsed = coachPlanSchema.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(422).json({ error: "A plan is a list of up to 30 sessions" });
+    return;
+  }
+  const link = await activeCoachLink(req.auth!.userId, String(req.params.linkId));
+  if (!link) {
+    res.status(404).json({ error: "Athlete not found in your squad" });
+    return;
+  }
+  const ids = parsed.data.sessionIds;
+  const playable = await prisma.session.count({ where: { id: { in: ids }, isPublished: true, comingSoon: false } });
+  if (playable !== new Set(ids).size || new Set(ids).size !== ids.length) {
+    res.status(422).json({ error: "Plans can only use each available session once" });
+    return;
+  }
+  const updated = await prisma.coachLink.update({
+    where: { id: link.id },
+    data: { planSessionIds: ids, planUpdatedAt: new Date() },
+  });
+  await audit(req, "COACH_PLAN_SET", "COACH_LINK", link.id);
+  res.json({ sessionIds: updated.planSessionIds, updatedAt: updated.planUpdatedAt?.toISOString() });
+}
+
+/** Coach: remove an athlete (or a pending request) from the squad. */
+async function coachRemoveAthleteHandler(req: Request, res: Response) {
+  const result = await prisma.coachLink.updateMany({
+    where: {
+      id: String(req.params.linkId),
+      coach: { userId: req.auth!.userId },
+      status: { in: ["PENDING_PARENT", "ACTIVE"] },
+    },
+    data: { status: "REVOKED", revokedAt: new Date(), revokedById: req.auth!.userId },
+  });
+  if (result.count === 0) {
+    res.status(404).json({ error: "Athlete not found in your squad" });
+    return;
+  }
+  await audit(req, "COACH_LINK_REVOKE", "COACH_LINK", String(req.params.linkId));
+  res.status(204).end();
+}
+
+// =============================================================================
+
+// =============================================================================
 // Express app setup
 // =============================================================================
 
@@ -2183,6 +2606,17 @@ app.get(
   wrap(getCaregiverDashboardHandler),
 );
 app.get("/athlete/progress", wrap(authenticate), requireRole("athlete"), wrap(getAthleteProgressHandler));
+app.get("/athlete/coach", wrap(authenticate), requireRole("athlete"), wrap(getAthleteCoachHandler));
+app.post("/athlete/coach", wrap(authenticate), requireRole("athlete"), pairingClaimLimiter, wrap(joinSquadHandler));
+app.delete("/athlete/coach/:linkId", wrap(authenticate), requireRole("athlete"), wrap(leaveCoachHandler));
+app.get("/caregiver/coaches", wrap(authenticate), requireRole("caregiver"), wrap(getCaregiverCoachLinksHandler));
+app.post("/caregiver/coaches/:linkId/decision", wrap(authenticate), requireRole("caregiver"), wrap(decideCoachRequestHandler));
+app.delete("/caregiver/coaches/:linkId", wrap(authenticate), requireRole("caregiver"), wrap(caregiverRemoveCoachHandler));
+app.get("/coach/squad", wrap(authenticate), requireRole("coach"), wrap(getCoachSquadHandler));
+app.get("/coach/athletes/:linkId", wrap(authenticate), requireRole("coach"), wrap(getCoachAthleteHandler));
+app.put("/coach/athletes/:linkId/plan", wrap(authenticate), requireRole("coach"), wrap(setCoachPlanHandler));
+app.delete("/coach/athletes/:linkId", wrap(authenticate), requireRole("coach"), wrap(coachRemoveAthleteHandler));
+app.post("/admin/coach-invites", wrap(authenticate), requireRole("mentor_admin"), wrap(adminCreateCoachInviteHandler));
 app.get("/athlete/queue-status", wrap(authenticate), requireRole("athlete"), wrap(getOfflineQueueStatusHandler));
 app.patch("/athlete/profile", wrap(authenticate), requireRole("athlete"), wrap(updateAthleteProfileHandler));
 

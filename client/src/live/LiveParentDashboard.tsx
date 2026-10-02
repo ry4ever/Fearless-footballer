@@ -4,6 +4,7 @@ import type { CaregiverDashboardPayload, PairingLink } from "@shared/types";
 import { ApiError, apiClient } from "../lib/apiClient";
 import { AccountActions } from "./AccountActions";
 import { useSession } from "./session";
+import { CaregiverCoachCard } from "./CaregiverCoachCard";
 
 interface LiveParentDashboardProps {
   link: PairingLink;
@@ -126,6 +127,8 @@ export function LiveParentDashboard({ link }: LiveParentDashboardProps) {
             <span /> Linked
           </span>
         </section>
+
+        <CaregiverCoachCard />
 
         <section className="parent-summary-card" aria-label="Last 7 days">
           <div className="summary-heading">

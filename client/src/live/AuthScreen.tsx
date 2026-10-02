@@ -20,6 +20,7 @@ export function AuthScreen() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [birthDate, setBirthDate] = useState("");
+  const [inviteCode, setInviteCode] = useState("");
   const [privacyAcknowledged, setPrivacyAcknowledged] = useState(false);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
@@ -48,6 +49,7 @@ export function AuthScreen() {
           password,
           privacyAcknowledged,
           ...(role === "athlete" ? { birthDate, timezone: browserTimezone() } : {}),
+          ...(role === "coach" ? { inviteCode: inviteCode.trim() } : {}),
         });
       } else {
         await apiClient.signIn(email.trim(), password, role);
@@ -74,12 +76,15 @@ export function AuthScreen() {
         <button type="button" aria-pressed={role === "caregiver"} onClick={() => setRole("caregiver")}>
           Parent or guardian
         </button>
+        <button type="button" aria-pressed={role === "coach"} onClick={() => setRole("coach")}>
+          Coach
+        </button>
       </div>
 
       <form className="live-form" onSubmit={submit}>
         {registering && (
           <label className="live-field">
-            {role === "athlete" ? "First name" : "Your name"}
+            {role === "athlete" ? "First name" : role === "coach" ? "Your name (players see this)" : "Your name"}
             <input value={name} onChange={(e) => setName(e.target.value)} autoComplete="given-name" required maxLength={100} />
           </label>
         )}
@@ -99,6 +104,20 @@ export function AuthScreen() {
           />
           {registering && <span className="live-hint">At least 8 characters, with a letter and a number.</span>}
         </label>
+        {registering && role === "coach" && (
+          <label className="live-field">
+            Coach invite code
+            <input
+              value={inviteCode}
+              onChange={(e) => setInviteCode(e.target.value)}
+              autoComplete="off"
+              autoCapitalize="characters"
+              required
+              placeholder="COACH-…"
+            />
+            <span className="live-hint">Coach accounts are by invitation. Mark sends you the code.</span>
+          </label>
+        )}
         {registering && role === "athlete" && (
           <label className="live-field">
             Date of birth
@@ -114,7 +133,9 @@ export function AuthScreen() {
               onChange={(e) => setPrivacyAcknowledged(e.target.checked)}
             />
             <span>
-              I've read the privacy notice. Reflections stay private to the player; parents see progress patterns only.
+              {role === "coach"
+                ? "I've read the privacy notice. I'll only see a player's training progress once their parent or guardian approves – never their reflections."
+                : "I've read the privacy notice. Reflections stay private to the player; parents see progress patterns only."}
             </span>
           </label>
         )}

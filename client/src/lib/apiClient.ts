@@ -1,8 +1,12 @@
 import type {
+  AthleteCoachLink,
   AthleteProgress,
   AuthTokenSet,
   BetaUserRole,
+  CaregiverCoachLink,
   CaregiverDashboardPayload,
+  CoachAthleteDetail,
+  CoachSquadResponse,
   CompletionSyncResponse,
   PairingApprovalResponse,
   PairingClaimResponse,
@@ -272,6 +276,59 @@ class ApiClient {
 
   public getCaregiverDashboard(athleteId: string): Promise<CaregiverDashboardPayload> {
     return this.request<CaregiverDashboardPayload>(`/caregiver/athletes/${encodeURIComponent(athleteId)}/dashboard`);
+  }
+
+  // --- Coaches: athlete side ---
+  public async getMyCoach(): Promise<AthleteCoachLink | null> {
+    return (await this.request<{ coach: AthleteCoachLink | null }>("/athlete/coach")).coach;
+  }
+
+  public async joinSquad(squadCode: string): Promise<AthleteCoachLink> {
+    const data = await this.request<{ coach: AthleteCoachLink }>("/athlete/coach", {
+      method: "POST",
+      body: JSON.stringify({ squadCode }),
+    });
+    return data.coach;
+  }
+
+  public async leaveCoach(linkId: string): Promise<void> {
+    await this.request<void>(`/athlete/coach/${encodeURIComponent(linkId)}`, { method: "DELETE" });
+  }
+
+  // --- Coaches: parent or guardian side ---
+  public async getCoachRequests(): Promise<CaregiverCoachLink[]> {
+    return (await this.request<{ coaches: CaregiverCoachLink[] }>("/caregiver/coaches")).coaches;
+  }
+
+  public async decideCoachRequest(linkId: string, approved: boolean): Promise<void> {
+    await this.request(`/caregiver/coaches/${encodeURIComponent(linkId)}/decision`, {
+      method: "POST",
+      body: JSON.stringify({ approved }),
+    });
+  }
+
+  public async removeCoach(linkId: string): Promise<void> {
+    await this.request<void>(`/caregiver/coaches/${encodeURIComponent(linkId)}`, { method: "DELETE" });
+  }
+
+  // --- Coaches: coach side ---
+  public getCoachSquad(): Promise<CoachSquadResponse> {
+    return this.request<CoachSquadResponse>("/coach/squad");
+  }
+
+  public getCoachAthlete(linkId: string): Promise<CoachAthleteDetail> {
+    return this.request<CoachAthleteDetail>(`/coach/athletes/${encodeURIComponent(linkId)}`);
+  }
+
+  public setCoachPlan(linkId: string, sessionIds: string[]): Promise<{ sessionIds: string[]; updatedAt?: string }> {
+    return this.request(`/coach/athletes/${encodeURIComponent(linkId)}/plan`, {
+      method: "PUT",
+      body: JSON.stringify({ sessionIds }),
+    });
+  }
+
+  public async removeFromSquad(linkId: string): Promise<void> {
+    await this.request<void>(`/coach/athletes/${encodeURIComponent(linkId)}`, { method: "DELETE" });
   }
 }
 

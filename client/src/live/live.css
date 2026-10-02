@@ -231,3 +231,8 @@
   background: rgba(0, 0, 0, 0.55);
   cursor: pointer;
 }
+
+/* Coach requests on the parent dashboard */
+.coach-requests { display: grid; gap: 16px; margin-bottom: 14px; }
+.coach-request + .coach-request { padding-top: 16px; border-top: 1px solid rgba(143, 176, 220, 0.16); }
+.coach-request h2 { margin: 6px 0; }
